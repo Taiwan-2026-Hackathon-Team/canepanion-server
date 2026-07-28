@@ -1,16 +1,21 @@
 package infra
 
 import (
+	"canepanion-server/models"
 	"log"
-	// "canepanion-server/models"
 )
 
 func SyncDatabase() {
 	log.Println("Syncing declared database schema...")
 
 	err := DB.AutoMigrate(
-		// TODO: add models here after being declared on models/*
-		// &models.Users{},
+		&models.Users{},
+		&models.Devices{},
+		&models.Locations{},
+		&models.Audio{},
+		&models.SensorEvents{},
+		&models.Alerts{},
+		&models.Notifications{},
 	)
 	if err != nil {
 		log.Fatalf("failed to auto-migrate database schema: %v", err)
