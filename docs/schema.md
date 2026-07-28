@@ -1,0 +1,160 @@
+# Database Schema
+
+This document describes the database schema represented by the GORM models in
+[`models/`](../models/). Table and column names follow GORM's default naming
+conventions unless a `column` tag explicitly overrides the name.
+
+## Entity relationship diagram
+
+```mermaid
+erDiagram
+    USERS ||--o{ DEVICES : owns
+    USERS ||--o{ DEVICES : guards
+    USERS ||--o{ NOTIFICATIONS : receives
+    DEVICES ||--o{ AUDIO : records
+    DEVICES ||--o{ LOCATIONS : reports
+    DEVICES ||--o{ SENSOR_EVENTS : produces
+    DEVICES ||--o{ ALERTS : raises
+    SENSOR_EVENTS ||--o{ ALERTS : triggers
+    ALERTS ||--o{ NOTIFICATIONS : generates
+```
+
+All declared foreign keys use `ON UPDATE CASCADE` and `ON DELETE CASCADE`.
+Consequently, deleting a parent row also deletes its related child rows.
+
+## Tables
+
+### `users`
+
+Application users. A user can own devices, guard devices, and receive
+notifications.
+
+| Column | Database type | Null | Key / index | Default | Description |
+| --- | --- | --- | --- | --- | --- |
+| `id` | `uuid` | No | Primary key | — | User identifier. |
+| `username` | `varchar(100)` | No | — | — | Display or login name. |
+| `email` | `varchar(255)` | No | Unique index | — | Unique email address. |
+| `password_hash` | `text` | No | — | — | Password hash; excluded from JSON responses. |
+| `role` | `varchar(20)` | No | — | `VIEWER` | Authorization role. See [Enum values](#enum-values). |
+| `created_at` | timestamp | No¹ | — | Auto-created | Creation time managed by GORM. |
+| `updated_at` | timestamp | No¹ | — | Auto-updated | Last update time managed by GORM. |
+
+### `devices`
+
+Physical cane devices. Each device has one owner and one guardian.
+
+| Column | Database type | Null | Key / index | Default | Description |
+| --- | --- | --- | --- | --- | --- |
+| `id` | `uuid` | No | Primary key | — | Device identifier. |
+| `owner_user_id` | `uuid` | No | Index, FK → `users.id` | — | Device owner's user ID. |
+| `guardian_user_id` | `uuid` | No | Index, FK → `users.id` | — | Guardian's user ID. |
+| `name` | `varchar(100)` | No | — | — | Human-readable device name. |
+| `status` | `varchar(25)` | No | — | `ONLINE` | Current device state. |
+| `battery_level` | `integer` | No¹ | — | Go zero value | Battery level reported by the device. |
+| `firmware_version` | `varchar(25)` | Yes | — | `NULL` | Installed firmware version. |
+| `last_seen_at` | timestamp | No¹ | — | Go zero value | Most recent device contact time. |
+| `created_at` | timestamp | No¹ | — | Auto-created | Creation time managed by GORM. |
+
+### `audio`
+
+Audio exchanged between a device user and the assistant.
+
+| Column | Database type | Null | Key / index | Default | Description |
+| --- | --- | --- | --- | --- | --- |
+| `id` | `uuid` | No | Primary key | — | Audio record identifier. |
+| `device_id` | `uuid` | No | Index, FK → `devices.id` | — | Source or destination device. |
+| `direction` | `varchar(30)` | No | — | — | Direction of the audio exchange. |
+| `storage_key` | `text` | No | — | — | Object-storage key for the audio file. |
+| `transcript` | `text` | Yes | — | `NULL` | Speech-to-text transcript. |
+| `response_text` | `text` | Yes | — | `NULL` | Assistant response text. |
+| `status` | `varchar(20)` | No | — | `UPLOADED` | Audio processing state. |
+| `created_at` | timestamp | No¹ | — | Auto-created | Creation time managed by GORM. |
+
+### `locations`
+
+Location samples reported by a device.
+
+| Column | Database type | Null | Key / index | Default | Description |
+| --- | --- | --- | --- | --- | --- |
+| `id` | `uuid` | No | Primary key | — | Location sample identifier. |
+| `device_id` | `uuid` | No | Index, FK → `devices.id` | — | Reporting device. |
+| `latitude` | `double precision` | No | — | — | Latitude in decimal degrees. |
+| `longitude` | `double precision` | No | — | — | Longitude in decimal degrees. |
+| `accuracy_meters` | `double precision` | No | — | — | Estimated positional accuracy in metres. |
+| `recorded_at` | timestamp | No | Index | — | Time at which the location was recorded. |
+
+### `sensor_events`
+
+Structured events emitted by a device.
+
+| Column | Database type | Null | Key / index | Default | Description |
+| --- | --- | --- | --- | --- | --- |
+| `id` | `uuid` | No | Primary key | — | Sensor event identifier. |
+| `device_id` | `uuid` | No | Index, FK → `devices.id` | — | Device that emitted the event. |
+| `event_type` | `varchar(30)` | No | — | — | Event category. |
+| `severity` | `varchar(20)` | No | — | — | Event severity. |
+| `event_data` | `jsonb` | No | — | — | Event-specific structured payload. |
+| `recorded_at` | timestamp | No | Index | — | Time at which the event was recorded. |
+
+### `alerts`
+
+Alerts created from sensor events for a device.
+
+| Column | Database type | Null | Key / index | Default | Description |
+| --- | --- | --- | --- | --- | --- |
+| `id` | `uuid` | No | Primary key | — | Alert identifier. |
+| `device_id` | `uuid` | No | Index, FK → `devices.id` | — | Device associated with the alert. |
+| `sensor_event_id` | `uuid` | No | Index, FK → `sensor_events.id` | — | Sensor event that triggered the alert. |
+| `alert_type` | `varchar(25)` | No | — | — | Alert category. |
+| `message` | `text` | No | — | — | Human-readable alert message. |
+| `status` | `varchar(20)` | No | — | `ACTIVE` | Alert lifecycle state. |
+| `created_at` | timestamp | No¹ | — | Auto-created | Creation time managed by GORM. |
+| `resolved_at` | timestamp | Yes | — | `NULL` | Time at which the alert was resolved. |
+
+### `notifications`
+
+Notifications sent to users for alerts.
+
+| Column | Database type | Null | Key / index | Default | Description |
+| --- | --- | --- | --- | --- | --- |
+| `id` | `uuid` | No | Primary key | — | Notification identifier. |
+| `user_id` | `uuid` | No | Index, FK → `users.id` | — | Notification recipient. |
+| `alert_id` | `uuid` | No | Index, FK → `alerts.id` | — | Related alert. |
+| `message` | `text` | No | — | — | Notification body. |
+| `is_read` | `boolean` | No | — | `false` | Whether the recipient has read the notification. |
+| `sent_at` | timestamp | No | Index | — | Time at which the notification was sent. |
+
+¹ The Go field is a non-pointer value. The model does not include an explicit
+`not null` GORM tag for this column; final database nullability can therefore
+depend on the generated migration and database dialect.
+
+## Enum values
+
+The enums are stored as strings. The application defines the following allowed
+values, although the model tags do not create database-level `CHECK`
+constraints.
+
+| Enum | Used by | Values |
+| --- | --- | --- |
+| `Role` | `users.role` | `ADMIN`, `CANE_USER`, `GUARDIAN` |
+| `DeviceStatus` | `devices.status` | `ONLINE`, `OFFLINE`, `INACTIVE` |
+| `AudioDirection` | `audio.direction` | `USER_TO_ASSISTANT`, `ASSISTANT_TO_USER` |
+| `AudioStatus` | `audio.status` | `UPLOADED`, `PROCESSING`, `COMPLETED`, `FAILED` |
+| `SensorEventType` | `sensor_events.event_type` | `FALL_DETECTED`, `OBSTACLE_DETECTED`, `SOS_TRIGGERED`, `LOW_BATTERY`, `DEVICE_STARTED`, `DEVICE_ERROR` |
+| `EventSeverity` | `sensor_events.severity` | `INFO`, `WARNING`, `CRITICAL` |
+| `AlertType` | `alerts.alert_type` | `FALL`, `SOS`, `LOW_BATTERY`, `DEVICE_OFFLINE` |
+| `AlertStatus` | `alerts.status` | `ACTIVE`, `ACKNOWLEDGED`, `RESOLVED` |
+
+## Schema notes
+
+- The `users.role` default is `VIEWER`, but `VIEWER` is not defined in the
+  `Role` enum. Inserts that rely on this default can therefore create a value
+  the application does not recognize.
+- UUID primary keys do not declare a database default or a GORM create hook.
+  The application must assign each UUID before insertion unless migrations add
+  a database-side default.
+- Relationships are declared through GORM associations. The actual database
+  constraints depend on the migration configuration being allowed to create
+  foreign keys.
+- `sensor_events.event_data` has no fixed JSON schema; its shape depends on the
+  corresponding `event_type`.
