@@ -32,11 +32,10 @@ func (h *Handler) SignUp(c *gin.Context) {
 		return
 	}
 
-	utils.SetCookie(c, token, 3600*5)
-
 	c.JSON(200, gin.H{
 		"message": "Signed In Successfully",
 		"user":    user,
+		"token":   token,
 	})
 }
 
@@ -53,11 +52,10 @@ func (h *Handler) LogIn(c *gin.Context) {
 		return
 	}
 
-	utils.SetCookie(c, token, 3600*5)
-
 	c.JSON(200, gin.H{
 		"message": "Signed In Successfully",
 		"user":    user,
+		"token":   token,
 	})
 }
 

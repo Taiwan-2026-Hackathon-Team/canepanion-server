@@ -12,23 +12,23 @@ import (
 
 func JWTAuthMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		authHeader := c.GetHeader("Authorization")
+		const bearerPrefix = "Bearer "
 
 		var jwt_secret = []byte(os.Getenv("JWT_SECRET"))
-		var tokenStr string
+		authHeader := strings.TrimSpace(c.GetHeader("Authorization"))
+		if !strings.HasPrefix(authHeader, bearerPrefix) {
+			appError := appErr.NewUnauthorized("Unauthorized. Missing bearer token", nil)
+			c.JSON(appError.Code, gin.H{"error": appError.Message})
+			c.Abort()
+			return
+		}
 
-		if strings.HasPrefix(authHeader, "Bearer ") {
-			tokenStr = strings.TrimPrefix(authHeader, "Bearer ")
-		} else {
-			cookieToken, err := c.Cookie("jwt")
-			if err != nil {
-				appError := appErr.NewUnauthorized("Unauthorized. Missing token at the cookie or header", err)
-				c.JSON(appError.Code, gin.H{"error": appError.Message})
-				c.Abort()
-				return
-			}
-
-			tokenStr = cookieToken
+		tokenStr := strings.TrimSpace(strings.TrimPrefix(authHeader, bearerPrefix))
+		if tokenStr == "" {
+			appError := appErr.NewUnauthorized("Unauthorized. Missing bearer token", nil)
+			c.JSON(appError.Code, gin.H{"error": appError.Message})
+			c.Abort()
+			return
 		}
 
 		token, err := jwt.Parse(tokenStr, func(token *jwt.Token) (interface{}, error) {
