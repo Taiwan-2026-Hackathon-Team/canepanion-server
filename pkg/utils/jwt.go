@@ -1,11 +1,12 @@
 package utils
 
 import (
-	// "canepanion-server/models"
+	"canepanion-server/models"
 	appErr "canepanion-server/pkg/errors"
 
 	"fmt"
 	"os"
+	"time"
 
 	"github.com/golang-jwt/jwt"
 )
@@ -16,23 +17,23 @@ type UserClaims struct {
 	jwt.StandardClaims
 }
 
-// func GenerateJWT(user *models.Users) (string, error) {
-// 	claims := jwt.MapClaims{
-// 		"userId": user.ID.String(),
-// 		"role":   user.Role,
-// 		"exp":    time.Now().Add(time.Hour * 5).Unix(), //5 hour token expiration
-// 	}
+func GenerateJWT(user *models.Users) (string, error) {
+	claims := jwt.MapClaims{
+		"userId": user.ID.String(),
+		"role":   user.Role,
+		"exp":    time.Now().Add(time.Hour * 5).Unix(), //5 hour token expiration
+	}
 
-// 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-// 	secret := os.Getenv("JWT_SECRET")
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	secret := os.Getenv("JWT_SECRET")
 
-// 	tokenStr, err := token.SignedString([]byte(secret))
-// 	if err != nil {
-// 		return "", err
-// 	}
+	tokenStr, err := token.SignedString([]byte(secret))
+	if err != nil {
+		return "", err
+	}
 
-// 	return tokenStr, nil
-// }
+	return tokenStr, nil
+}
 
 func ParseJWT(tokenStr string) (*UserClaims, error) {
 	token, err := jwt.ParseWithClaims(tokenStr, &UserClaims{},
