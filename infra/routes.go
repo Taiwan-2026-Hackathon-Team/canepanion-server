@@ -2,6 +2,7 @@ package infra
 
 import (
 	"canepanion-server/internal/audio"
+	"canepanion-server/internal/auth"
 	devicecontrol "canepanion-server/internal/device_controls"
 	"canepanion-server/internal/devices"
 	firmwareauth "canepanion-server/internal/firmware_auth"
@@ -20,6 +21,7 @@ func RegisterRoutes(r *gin.Engine, DB *gorm.DB) {
 	v1 := r.Group("/api/v1")
 
 	// Baseline Feature Routes
+	registerAuth(v1, DB)
 	registerDevices(v1, DB)
 
 	// Firmware–Cloud API Routes
@@ -31,10 +33,22 @@ func RegisterRoutes(r *gin.Engine, DB *gorm.DB) {
 	registerFirmwareUpdates(firmware, DB)
 }
 
+func registerAuth(r *gin.RouterGroup, DB *gorm.DB) {
+	auth := auth.NewHandler(DB)
+
+	authGrp := r.Group("/auth")
+	{
+		authGrp.POST("/register", auth.SignUp)
+		authGrp.POST("/login", auth.LogIn)
+		authGrp.POST("/logout", auth.LogOut)
+		authGrp.GET("/me", auth.GetCurrentUser)
+	}
+}
+
 func registerDevices(r *gin.RouterGroup, DB *gorm.DB) {
 	handler := devices.NewHandler(DB)
 
-	r.POST("/devices", handler.Create)
+	r.POST("/devices", handler.AddDevice)
 }
 
 func registerFirmwareAuth(r *gin.RouterGroup, DB *gorm.DB) {
