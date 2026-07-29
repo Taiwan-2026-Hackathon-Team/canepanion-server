@@ -15,6 +15,7 @@ type Devices struct {
 	BatteryLevel    int32        `gorm:"type:integer" json:"batteryLevel"`
 	FirmwareVersion *string      `gorm:"type:varchar(25)" json:"firmwareVersion"`
 	LastSeenAt      time.Time    `json:"lastSeenAt"`
+	CredentialHash  *string      `gorm:"column:credential_hash;type:text" json:"-"`
 	CreatedAt       time.Time    `gorm:"autoCreateTime" json:"createdAt"`
 
 	Owner    Users `gorm:"foreignKey:OwnerUserID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE" json:"-"`
