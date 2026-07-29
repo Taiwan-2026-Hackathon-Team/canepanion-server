@@ -21,10 +21,21 @@ type ActivateResponse struct {
 	FirmwareVersion string              `json:"firmwareVersion"`
 	LastSeenAt      time.Time           `json:"lastSeenAt"`
 	ServerTime      time.Time           `json:"serverTime"`
+	Credential      string              `json:"credential"`
 }
 
-type CreateSessionRequest struct{}
-type CreateSessionResponse struct{}
+type CreateSessionRequest struct {
+	DeviceID   string `json:"deviceId" binding:"required,uuid"`
+	Credential string `json:"credential" binding:"required"`
+}
+
+type CreateSessionResponse struct {
+	DeviceID    uuid.UUID `json:"deviceId"`
+	AccessToken string    `json:"accessToken"`
+	TokenType   string    `json:"tokenType"`
+	ExpiresIn   int64     `json:"expiresIn"`
+	ExpiresAt   time.Time `json:"expiresAt"`
+}
 
 type HeartbeatRequest struct{}
 type HeartbeatResponse struct{}
