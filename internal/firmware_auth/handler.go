@@ -36,7 +36,19 @@ func (h *Handler) ActivateDevice(c *gin.Context) {
 }
 
 func (h *Handler) CreateSession(c *gin.Context) {
-	notImplemented(c, "create firmware session")
+	req, err := http_helper.BindJSON[CreateSessionRequest](c)
+	if err != nil {
+		_ = c.Error(err)
+		return
+	}
+
+	response, err := h.service.CreateSession(req)
+	if err != nil {
+		_ = c.Error(err)
+		return
+	}
+
+	c.JSON(http.StatusOK, response)
 }
 
 func (h *Handler) Heartbeat(c *gin.Context) {
