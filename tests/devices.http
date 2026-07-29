@@ -1,0 +1,10 @@
+### Create a device owned by the logged-in cane user
+
+POST http://localhost:8080/api/v1/devices
+Content-Type: application/json
+Accept: application/json
+
+{
+  "name": "Cane Device",
+  "guardianUserId": "c122ea2c-d86e-4c1a-b800-379e7b9cbe50"
+}
