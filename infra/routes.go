@@ -9,6 +9,8 @@ import (
 	firmwareupdates "canepanion-server/internal/firmware_updates"
 	"canepanion-server/internal/telemetry"
 
+	"canepanion-server/middleware"
+
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )
@@ -27,10 +29,10 @@ func RegisterRoutes(r *gin.Engine, DB *gorm.DB) {
 	// Firmware–Cloud API Routes
 	firmware := v1.Group("/firmware")
 	registerFirmwareAuth(firmware, DB)
-	registerFirmwareTelemetry(firmware, DB)
-	registerFirmwareAudio(firmware, DB)
-	registerFirmwareControl(firmware, DB)
-	registerFirmwareUpdates(firmware, DB)
+	// registerFirmwareTelemetry(firmware, DB)
+	// registerFirmwareAudio(firmware, DB)
+	// registerFirmwareControl(firmware, DB)
+	// registerFirmwareUpdates(firmware, DB)
 }
 
 func registerAuth(r *gin.RouterGroup, DB *gorm.DB) {
@@ -41,22 +43,22 @@ func registerAuth(r *gin.RouterGroup, DB *gorm.DB) {
 		authGrp.POST("/register", auth.SignUp)
 		authGrp.POST("/login", auth.LogIn)
 		authGrp.POST("/logout", auth.LogOut)
-		authGrp.GET("/me", auth.GetCurrentUser)
+		authGrp.GET("/me", middleware.JWTAuthMiddleware(), auth.GetCurrentUser)
 	}
 }
 
 func registerDevices(r *gin.RouterGroup, DB *gorm.DB) {
 	handler := devices.NewHandler(DB)
 
-	r.POST("/devices", handler.AddDevice)
+	r.POST("/devices", middleware.JWTAuthMiddleware(), handler.AddDevice)
 }
 
 func registerFirmwareAuth(r *gin.RouterGroup, DB *gorm.DB) {
 	handler := firmwareauth.NewHandler(DB)
 
-	r.POST("/devices/activate", handler.Activate)
-	r.POST("/session", handler.CreateSession)
-	r.POST("/devices/:deviceId/heartbeat", handler.Heartbeat)
+	r.POST("/devices/activate", handler.ActivateDevice)
+	// r.POST("/session", handler.CreateSession)
+	// r.POST("/devices/:deviceId/heartbeat", handler.Heartbeat)
 }
 
 func registerFirmwareTelemetry(r *gin.RouterGroup, DB *gorm.DB) {
