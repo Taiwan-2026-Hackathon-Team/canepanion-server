@@ -57,7 +57,7 @@ func registerFirmwareAuth(r *gin.RouterGroup, DB *gorm.DB) {
 	handler := firmwareauth.NewHandler(DB)
 
 	r.POST("/devices/activate", handler.ActivateDevice)
-	// r.POST("/session", handler.CreateSession)
+	r.POST("/session", handler.CreateSession)
 	// r.POST("/devices/:deviceId/heartbeat", handler.Heartbeat)
 }
 
