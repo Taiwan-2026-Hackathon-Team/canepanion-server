@@ -1,8 +1,14 @@
 package infra
 
 import (
-	"github.com/gin-gonic/gin"
+	"canepanion-server/internal/audio"
+	devicecontrol "canepanion-server/internal/device_controls"
+	"canepanion-server/internal/devices"
+	firmwareauth "canepanion-server/internal/firmware_auth"
+	firmwareupdates "canepanion-server/internal/firmware_updates"
+	"canepanion-server/internal/telemetry"
 
+	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )
 
@@ -26,54 +32,52 @@ func RegisterRoutes(r *gin.Engine, DB *gorm.DB) {
 }
 
 func registerDevices(r *gin.RouterGroup, DB *gorm.DB) {
-	// devices := device.NewHandler(DB)
+	handler := devices.NewHandler(DB)
 
-	{
-		r.POST("/devices")
-	}
+	r.POST("/devices", handler.Create)
 }
 
 func registerFirmwareAuth(r *gin.RouterGroup, DB *gorm.DB) {
-	// firmwareAuth := firmwareauth.NewHandler(DB)
+	handler := firmwareauth.NewHandler(DB)
 
-	r.POST("/devices/activate")
-	r.POST("/session")
-	r.POST("/devices/:deviceId/heartbeat")
+	r.POST("/devices/activate", handler.Activate)
+	r.POST("/session", handler.CreateSession)
+	r.POST("/devices/:deviceId/heartbeat", handler.Heartbeat)
 }
 
 func registerFirmwareTelemetry(r *gin.RouterGroup, DB *gorm.DB) {
-	// telemetry := telemetry.NewHandler(DB)
+	handler := telemetry.NewHandler(DB)
 
-	r.POST("/devices/:deviceId/telemetry")
+	r.POST("/devices/:deviceId/telemetry", handler.Submit)
 }
 
 func registerFirmwareAudio(r *gin.RouterGroup, DB *gorm.DB) {
-	// audio := audio.NewHandler(DB)
+	handler := audio.NewHandler(DB)
 
 	audioGrp := r.Group("/devices/:deviceId/audio")
 	{
-		audioGrp.POST("/uploads")
-		audioGrp.POST("/:audioId/complete")
+		audioGrp.POST("/uploads", handler.CreateUpload)
+		audioGrp.POST("/:audioId/complete", handler.CompleteUpload)
 	}
 }
 
 func registerFirmwareControl(r *gin.RouterGroup, DB *gorm.DB) {
-	// control := devicecontrol.NewHandler(DB)
+	handler := devicecontrol.NewHandler(DB)
 
 	deviceGrp := r.Group("/devices/:deviceId")
 	{
-		deviceGrp.GET("/config")
-		deviceGrp.GET("/commands")
-		deviceGrp.POST("/commands/:commandId/ack")
+		deviceGrp.GET("/config", handler.GetConfig)
+		deviceGrp.GET("/commands", handler.ListCommands)
+		deviceGrp.POST("/commands/:commandId/ack", handler.AcknowledgeCommand)
 	}
 }
 
 func registerFirmwareUpdates(r *gin.RouterGroup, DB *gorm.DB) {
-	// updates := firmwareupdates.NewHandler(DB)
+	handler := firmwareupdates.NewHandler(DB)
 
 	firmwareGrp := r.Group("/devices/:deviceId/firmware")
 	{
-		firmwareGrp.GET("/latest")
-		firmwareGrp.POST("/report")
+		firmwareGrp.GET("/latest", handler.GetLatest)
+		firmwareGrp.POST("/report", handler.Report)
 	}
 }
