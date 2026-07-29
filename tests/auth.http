@@ -24,3 +24,6 @@ Accept: application/json
 ### Log out
 POST http://localhost:8080/api/v1/auth/logout
 Accept: application/json
+
+### Get Authenticated User
+GET http://localhost:8080/api/v1/auth/me

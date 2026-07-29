@@ -1,0 +1,20 @@
+### Activate a registered device
+POST http://localhost:8080/api/v1/firmware/devices/activate
+Content-Type: application/json
+Accept: application/json
+
+{
+  "deviceId": "82547dee-5418-4e85-8ad3-921a50d6d906",
+  "batteryLevel": 100,
+  "firmwareVersion": "1.0.0"
+}
+
+### Exchange the device credential for a short-lived token
+POST http://localhost:8080/api/v1/firmware/session
+Content-Type: application/json
+Accept: application/json
+
+{
+  "deviceId": "82547dee-5418-4e85-8ad3-921a50d6d906",
+  "credential": "i0zLoNqbHVHhUo-7IzN3MEf-Ihntf0W_SK09gAGKmoE"
+}

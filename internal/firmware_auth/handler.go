@@ -3,6 +3,8 @@ package firmwareauth
 import (
 	"net/http"
 
+	http_helper "canepanion-server/pkg/http"
+
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )
@@ -17,12 +19,36 @@ func NewHandler(db *gorm.DB) *Handler {
 	return &Handler{service: service}
 }
 
-func (h *Handler) Activate(c *gin.Context) {
-	notImplemented(c, "activate device")
+func (h *Handler) ActivateDevice(c *gin.Context) {
+	req, err := http_helper.BindJSON[ActivateRequest](c)
+	if err != nil {
+		_ = c.Error(err)
+		return
+	}
+
+	response, err := h.service.ActivateDevice(req)
+	if err != nil {
+		_ = c.Error(err)
+		return
+	}
+
+	c.JSON(http.StatusOK, response)
 }
 
 func (h *Handler) CreateSession(c *gin.Context) {
-	notImplemented(c, "create firmware session")
+	req, err := http_helper.BindJSON[CreateSessionRequest](c)
+	if err != nil {
+		_ = c.Error(err)
+		return
+	}
+
+	response, err := h.service.CreateSession(req)
+	if err != nil {
+		_ = c.Error(err)
+		return
+	}
+
+	c.JSON(http.StatusOK, response)
 }
 
 func (h *Handler) Heartbeat(c *gin.Context) {
