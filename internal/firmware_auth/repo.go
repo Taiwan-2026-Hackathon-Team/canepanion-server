@@ -29,6 +29,6 @@ func (r *Repository) FindDeviceByID(deviceID uuid.UUID) (*models.Devices, error)
 
 func (r *Repository) UpdateActivation(device *models.Devices) error {
 	return r.db.Model(device).
-		Select("Status", "BatteryLevel", "FirmwareVersion", "LastSeenAt").
+		Select("Status", "BatteryLevel", "FirmwareVersion", "CredentialHash", "LastSeenAt").
 		Updates(device).Error
 }
