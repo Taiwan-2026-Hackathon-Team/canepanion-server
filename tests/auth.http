@@ -1,3 +1,5 @@
+@authToken = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE3ODUzNDM3OTgsInJvbGUiOiJDQU5FX1VTRVIiLCJ1c2VySWQiOiIyYjMwZDJiNi01ZWYyLTRlZGEtYTc5YS0xOGUzMGVlMWM5MDkifQ.JBzvDExbkg7H7HFYnBhMWvubji_3NWxDdDgQbK8xnUQ
+
 ### Sign up
 POST http://localhost:8080/api/v1/auth/register
 Content-Type: application/json
@@ -27,3 +29,5 @@ Accept: application/json
 
 ### Get Authenticated User
 GET http://localhost:8080/api/v1/auth/me
+Accept: application/json
+Authorization: Bearer {{authToken}}
