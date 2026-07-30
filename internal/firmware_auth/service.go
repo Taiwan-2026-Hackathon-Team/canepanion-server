@@ -1,11 +1,17 @@
 package firmwareauth
 
 import (
+	"strings"
 	"time"
 
 	"canepanion-server/models"
 	appErr "canepanion-server/pkg/errors"
 	"canepanion-server/pkg/utils"
+)
+
+const (
+	maxHeartbeatClockSkew = 5 * time.Minute
+	nextHeartbeatSeconds  = 60
 )
 
 type Service struct {
@@ -91,5 +97,48 @@ func (s *Service) CreateSession(req *CreateSessionRequest) (*CreateSessionRespon
 		TokenType:   "Bearer",
 		ExpiresIn:   int64(utils.DeviceTokenTTL.Seconds()),
 		ExpiresAt:   expiresAt,
+	}, nil
+}
+
+func (s *Service) RecordHeartbeat(deviceIDValue string, req *HeartbeatRequest) (*HeartbeatResponse, error) {
+	deviceID, err := utils.ParseId(deviceIDValue)
+	if err != nil {
+		return nil, appErr.NewBadRequest("Invalid device ID", err)
+	}
+
+	if strings.TrimSpace(req.MessageID) == "" {
+		return nil, appErr.NewBadRequest("Invalid messageId", nil)
+	}
+	if req.RecordedAt.IsZero() {
+		return nil, appErr.NewBadRequest("recordedAt is required and must be an RFC3339 timestamp", nil)
+	}
+	if req.BatteryLevel == nil || *req.BatteryLevel < 0 || *req.BatteryLevel > 100 {
+		return nil, appErr.NewBadRequest("batteryLevel must be between 0 and 100", nil)
+	}
+
+	firmwareVersion := strings.TrimSpace(req.FirmwareVersion)
+	if firmwareVersion == "" || len(firmwareVersion) > 25 {
+		return nil, appErr.NewBadRequest("firmwareVersion is required and must not exceed 25 characters", nil)
+	}
+	if req.Status != models.DeviceStatusOnline {
+		return nil, appErr.NewBadRequest("heartbeat status must be ONLINE", nil)
+	}
+
+	now := time.Now().UTC().Truncate(time.Second)
+	if req.RecordedAt.After(now.Add(maxHeartbeatClockSkew)) {
+		return nil, appErr.NewBadRequest("recordedAt cannot be more than 5 minutes in the future", nil)
+	}
+
+	updated, err := s.repo.UpdateHeartbeat(deviceID, *req.BatteryLevel, firmwareVersion, now)
+	if err != nil {
+		return nil, appErr.NewInternal("Failed to record device heartbeat", err)
+	}
+	if !updated {
+		return nil, appErr.NewNotFound("Device not found", nil)
+	}
+
+	return &HeartbeatResponse{
+		ServerTime:           now,
+		NextHeartbeatSeconds: nextHeartbeatSeconds,
 	}, nil
 }
