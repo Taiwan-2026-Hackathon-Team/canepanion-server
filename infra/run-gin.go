@@ -7,10 +7,11 @@ import (
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 
+	"canepanion-server/internal/push"
 	"canepanion-server/middleware"
 )
 
-func RunGin(config cors.Config) {
+func RunGin(config cors.Config, notifier push.Notifier) {
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "8080"
@@ -29,7 +30,7 @@ func RunGin(config cors.Config) {
 
 	r.Use(middleware.ErrorHandler())
 
-	RegisterRoutes(r, DB)
+	RegisterRoutes(r, DB, notifier)
 
 	err := r.Run("0.0.0.0:" + port)
 	if err != nil {

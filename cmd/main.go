@@ -1,8 +1,12 @@
 package main
 
 import (
+	"context"
+	"log"
+
 	"canepanion-server/config"
 	"canepanion-server/infra"
+	"canepanion-server/internal/push"
 )
 
 func main() {
@@ -13,5 +17,13 @@ func main() {
 
 	infra.ConnectDb()
 
-	infra.RunGin(config.CORS())
+	// Guardian push. Missing credentials yield a disabled notifier rather than
+	// an error, so the server still runs for anyone without the Firebase
+	// service account; only a malformed credential is fatal.
+	notifier, err := push.NewFCMNotifier(context.Background())
+	if err != nil {
+		log.Fatalf("Failed to initialize push notifications: %v", err)
+	}
+
+	infra.RunGin(config.CORS(), notifier)
 }

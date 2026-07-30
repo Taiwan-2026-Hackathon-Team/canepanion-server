@@ -3,6 +3,7 @@ package telemetry
 import (
 	"net/http"
 
+	"canepanion-server/internal/push"
 	http_helper "canepanion-server/pkg/http"
 
 	"github.com/gin-gonic/gin"
@@ -13,9 +14,9 @@ type Handler struct {
 	service *Service
 }
 
-func NewHandler(db *gorm.DB) *Handler {
+func NewHandler(db *gorm.DB, notifier push.Notifier) *Handler {
 	repo := NewRepository(db)
-	service := NewService(repo)
+	service := NewService(repo, notifier)
 	return &Handler{service: service}
 }
 

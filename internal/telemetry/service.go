@@ -1,10 +1,13 @@
 package telemetry
 
 import (
+	"context"
 	"encoding/json"
+	"log"
 	"strings"
 	"time"
 
+	"canepanion-server/internal/push"
 	"canepanion-server/models"
 	appErr "canepanion-server/pkg/errors"
 	"canepanion-server/pkg/utils"
@@ -19,11 +22,15 @@ const (
 )
 
 type Service struct {
-	repo *Repository
+	repo     *Repository
+	notifier push.Notifier
 }
 
-func NewService(repo *Repository) *Service {
-	return &Service{repo: repo}
+func NewService(repo *Repository, notifier push.Notifier) *Service {
+	if notifier == nil {
+		notifier = push.Disabled{}
+	}
+	return &Service{repo: repo, notifier: notifier}
 }
 
 func (s *Service) SubmitTelemetry(deviceIDValue string, req *SubmitTelemetryRequest) (*SubmitTelemetryResponse, error) {
@@ -78,7 +85,7 @@ func (s *Service) SubmitTelemetry(deviceIDValue string, req *SubmitTelemetryRequ
 
 	for i := range req.Events {
 		eventRequest := &req.Events[i]
-		eventResult, nestedLocationResult := s.storeEvent(deviceID, eventRequest, now)
+		eventResult, nestedLocationResult := s.storeEvent(device, eventRequest, now)
 		if eventResult.Status == ItemStatusRejected ||
 			(nestedLocationResult != nil && nestedLocationResult.Status == ItemStatusRejected) {
 			response.Status = SubmitTelemetryStatusPartiallyAccepted
@@ -152,7 +159,8 @@ func decodeTelemetryResponse(data json.RawMessage) (*SubmitTelemetryResponse, er
 	}, nil
 }
 
-func (s *Service) storeEvent(deviceID uuid.UUID, req *EventRequest, now time.Time) (EventResult, *LocationResult) {
+func (s *Service) storeEvent(device *models.Devices, req *EventRequest, now time.Time) (EventResult, *LocationResult) {
+	deviceID := device.ID
 	result := EventResult{EventID: req.EventID, Status: ItemStatusRejected}
 	if validationError := validateEvent(req, now); validationError != nil {
 		result.Error = validationError
@@ -211,6 +219,12 @@ func (s *Service) storeEvent(deviceID uuid.UUID, req *EventRequest, now time.Tim
 	result.SensorEventID = uuidPointer(storedEvent.ID)
 	if storedAlert != nil {
 		result.AlertID = uuidPointer(storedAlert.ID)
+		// Only on first ingest: the firmware retries a fall up to 3x and the
+		// repo dedupes on (device, external event id), so pushing on
+		// duplicates would buzz every guardian phone three times per fall.
+		if !eventDuplicate {
+			s.dispatchFallAlert(device, storedEvent, storedAlert, storedLocation)
+		}
 	}
 
 	var locationResult *LocationResult
@@ -316,6 +330,60 @@ func newLocationModel(deviceID uuid.UUID, req *LocationRequest) *models.Location
 		AccuracyMeters:     req.AccuracyMeters,
 		RecordedAt:         req.RecordedAt.UTC(),
 	}
+}
+
+// dispatchFallAlert pushes a safety alert to the guardian phones.
+//
+// It runs off the ingest path: the firmware retries every 3s and treats any
+// response as success, so it must get its 200 back without waiting on FCM.
+// Delivery failures are logged, never surfaced to the cane.
+func (s *Service) dispatchFallAlert(
+	device *models.Devices,
+	event *models.SensorEvents,
+	alert *models.Alerts,
+	location *models.Locations,
+) {
+	// The guardian app hard-filters on type == "fall_sos"; anything else is
+	// dropped on arrival, so there is no point paying for the send.
+	if alert.AlertType != models.AlertTypeFall && alert.AlertType != models.AlertTypeSOS {
+		return
+	}
+
+	// The app discards any payload whose lat/lon are not finite numbers, and
+	// the firmware omits location entirely when it has no GNSS fix. Fall back
+	// to the device's last known position rather than pushing an alert the
+	// app will silently throw away.
+	if location == nil {
+		latest, err := s.repo.FindLatestLocation(device.ID)
+		if err != nil {
+			log.Printf("push: alert %s has no location and lookup failed: %v", alert.ID, err)
+			return
+		}
+		if latest == nil {
+			log.Printf("push: alert %s dropped, device %q has never reported a location", alert.ID, device.Name)
+			return
+		}
+		log.Printf("push: alert %s has no fix, using last known location from %s",
+			alert.ID, latest.RecordedAt.UTC().Format(time.RFC3339))
+		location = latest
+	}
+
+	payload := push.FallAlert{
+		EventID:    event.ID.String(),
+		DeviceName: device.Name,
+		Latitude:   location.Latitude,
+		Longitude:  location.Longitude,
+		CreatedAt:  alert.CreatedAt,
+	}
+	if payload.CreatedAt.IsZero() {
+		payload.CreatedAt = time.Now().UTC()
+	}
+
+	go func() {
+		if err := s.notifier.NotifyFall(context.Background(), payload); err != nil {
+			log.Printf("push: failed to deliver alert %s: %v", alert.ID, err)
+		}
+	}()
 }
 
 func newAlertForEvent(deviceID uuid.UUID, event *models.SensorEvents, req *EventRequest) *models.Alerts {
