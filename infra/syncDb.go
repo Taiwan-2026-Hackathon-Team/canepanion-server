@@ -16,6 +16,7 @@ func SyncDatabase() {
 		&models.SensorEvents{},
 		&models.Alerts{},
 		&models.Notifications{},
+		&models.IngestionBatches{},
 	)
 	if err != nil {
 		log.Fatalf("failed to auto-migrate database schema: %v", err)

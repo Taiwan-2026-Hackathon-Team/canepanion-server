@@ -15,12 +15,16 @@ erDiagram
     DEVICES ||--o{ LOCATIONS : reports
     DEVICES ||--o{ SENSOR_EVENTS : produces
     DEVICES ||--o{ ALERTS : raises
+    DEVICES ||--o{ INGESTION_BATCHES : submits
+    LOCATIONS o|--o{ SENSOR_EVENTS : contextualizes
     SENSOR_EVENTS ||--o{ ALERTS : triggers
     ALERTS ||--o{ NOTIFICATIONS : generates
 ```
 
-All declared foreign keys use `ON UPDATE CASCADE` and `ON DELETE CASCADE`.
-Consequently, deleting a parent row also deletes its related child rows.
+Most declared foreign keys use `ON UPDATE CASCADE` and `ON DELETE CASCADE`.
+Consequently, deleting a device also deletes its ingestion batches and other
+device-owned records. The optional sensor-event location relationship instead
+uses `ON DELETE SET NULL`.
 
 ## Tables
 
@@ -52,6 +56,7 @@ Physical cane devices. Each device has one owner and one guardian.
 | `status` | `varchar(25)` | No | — | `ONLINE` | Current device state. |
 | `battery_level` | `integer` | No¹ | — | Go zero value | Battery level reported by the device. |
 | `firmware_version` | `varchar(25)` | Yes | — | `NULL` | Installed firmware version. |
+| `credential_hash` | `text` | Yes | &mdash; | `NULL` | Bcrypt hash of the long-lived device credential; excluded from JSON responses. |
 | `last_seen_at` | timestamp | No¹ | — | Go zero value | Most recent device contact time. |
 | `created_at` | timestamp | No¹ | — | Auto-created | Creation time managed by GORM. |
 
@@ -78,6 +83,7 @@ Location samples reported by a device.
 | --- | --- | --- | --- | --- | --- |
 | `id` | `uuid` | No | Primary key | — | Location sample identifier. |
 | `device_id` | `uuid` | No | Index, FK → `devices.id` | — | Reporting device. |
+| `external_location_id` | `varchar(100)` | Yes | Composite unique index with `device_id` | `NULL` | Firmware-provided retry/idempotency identifier. |
 | `latitude` | `double precision` | No | — | — | Latitude in decimal degrees. |
 | `longitude` | `double precision` | No | — | — | Longitude in decimal degrees. |
 | `accuracy_meters` | `double precision` | No | — | — | Estimated positional accuracy in metres. |
@@ -91,10 +97,25 @@ Structured events emitted by a device.
 | --- | --- | --- | --- | --- | --- |
 | `id` | `uuid` | No | Primary key | — | Sensor event identifier. |
 | `device_id` | `uuid` | No | Index, FK → `devices.id` | — | Device that emitted the event. |
+| `external_event_id` | `varchar(100)` | Yes | Composite unique index with `device_id` | `NULL` | Firmware-provided retry/idempotency identifier. |
+| `location_id` | `uuid` | Yes | Index, FK to `locations.id` | `NULL` | Optional location associated with the event; set to `NULL` if that location is deleted. |
 | `event_type` | `varchar(30)` | No | — | — | Event category. |
 | `severity` | `varchar(20)` | No | — | — | Event severity. |
 | `event_data` | `jsonb` | No | — | — | Event-specific structured payload. |
 | `recorded_at` | timestamp | No | Index | — | Time at which the event was recorded. |
+
+### `ingestion_batches`
+
+Stored telemetry-batch responses used to make firmware retries idempotent. A
+device can submit many batches, but each `message_id` is unique per device.
+
+| Column | Database type | Null | Key / index | Default | Description |
+| --- | --- | --- | --- | --- | --- |
+| `id` | `uuid` | No | Primary key | &mdash; | Ingestion batch identifier. |
+| `device_id` | `uuid` | No | Index, composite unique index, FK to `devices.id` | &mdash; | Device that submitted the batch. |
+| `message_id` | `varchar(100)` | No | Composite unique index with `device_id` | &mdash; | Firmware-provided batch idempotency identifier. |
+| `response` | `jsonb` | No | &mdash; | &mdash; | Original API response returned again for retries. |
+| `created_at` | timestamp | No<sup>1</sup> | &mdash; | Auto-created | Creation time managed by GORM. |
 
 ### `alerts`
 
@@ -158,3 +179,5 @@ constraints.
   foreign keys.
 - `sensor_events.event_data` has no fixed JSON schema; its shape depends on the
   corresponding `event_type`.
+- `(ingestion_batches.device_id, ingestion_batches.message_id)` is unique, so
+  retrying a telemetry batch returns its stored original response.
