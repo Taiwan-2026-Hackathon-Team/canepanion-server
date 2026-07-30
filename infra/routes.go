@@ -58,7 +58,7 @@ func registerFirmwareAuth(r *gin.RouterGroup, DB *gorm.DB) {
 
 	r.POST("/devices/activate", handler.ActivateDevice)
 	r.POST("/session", handler.CreateSession)
-	// r.POST("/devices/:deviceId/heartbeat", handler.Heartbeat)
+	r.POST("/devices/:deviceId/heartbeat", middleware.DeviceAuthMiddleware(), handler.Heartbeat)
 }
 
 func registerFirmwareTelemetry(r *gin.RouterGroup, DB *gorm.DB) {

@@ -52,9 +52,17 @@ func (h *Handler) CreateSession(c *gin.Context) {
 }
 
 func (h *Handler) Heartbeat(c *gin.Context) {
-	notImplemented(c, "record device heartbeat")
-}
+	req, err := http_helper.BindJSON[HeartbeatRequest](c)
+	if err != nil {
+		_ = c.Error(err)
+		return
+	}
 
-func notImplemented(c *gin.Context, operation string) {
-	c.JSON(http.StatusNotImplemented, gin.H{"message": operation + " is not implemented"})
+	response, err := h.service.RecordHeartbeat(c.Param("deviceId"), req)
+	if err != nil {
+		_ = c.Error(err)
+		return
+	}
+
+	c.JSON(http.StatusOK, response)
 }

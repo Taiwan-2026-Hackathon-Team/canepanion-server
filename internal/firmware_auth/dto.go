@@ -37,5 +37,15 @@ type CreateSessionResponse struct {
 	ExpiresAt   time.Time `json:"expiresAt"`
 }
 
-type HeartbeatRequest struct{}
-type HeartbeatResponse struct{}
+type HeartbeatRequest struct {
+	MessageID       string              `json:"messageId" binding:"required,max=100"`
+	RecordedAt      time.Time           `json:"recordedAt" binding:"required"`
+	BatteryLevel    *int32              `json:"batteryLevel" binding:"required"`
+	FirmwareVersion string              `json:"firmwareVersion" binding:"required,max=25"`
+	Status          models.DeviceStatus `json:"status" binding:"required"`
+}
+
+type HeartbeatResponse struct {
+	ServerTime           time.Time `json:"serverTime"`
+	NextHeartbeatSeconds int       `json:"nextHeartbeatSeconds"`
+}
