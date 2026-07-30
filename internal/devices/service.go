@@ -25,11 +25,13 @@ func (s *Service) AddDevice(ownerUserID string, req *CreateDeviceRequest) (*Crea
 		return nil, appErr.NewBadRequest("Invalid guardian user ID", err)
 	}
 
+	defaultVer := "1.0.0"
 	device := &models.Devices{
-		ID:             utils.GenerateUUID(),
-		OwnerUserID:    ownerID,
-		GuardianUserID: guardianID,
-		Name:           req.Name,
+		ID:              utils.GenerateUUID(),
+		OwnerUserID:     ownerID,
+		GuardianUserID:  guardianID,
+		Name:            req.Name,
+		FirmwareVersion: &defaultVer,
 	}
 
 	if err := s.repo.CreateDevice(device); err != nil {
