@@ -7,6 +7,7 @@ import (
 	"canepanion-server/internal/devices"
 	firmwareauth "canepanion-server/internal/firmware_auth"
 	firmwareupdates "canepanion-server/internal/firmware_updates"
+	"canepanion-server/internal/push"
 	"canepanion-server/internal/telemetry"
 
 	"canepanion-server/middleware"
@@ -15,7 +16,7 @@ import (
 	"gorm.io/gorm"
 )
 
-func RegisterRoutes(r *gin.Engine, DB *gorm.DB) {
+func RegisterRoutes(r *gin.Engine, DB *gorm.DB, notifier push.Notifier) {
 	r.GET("/", func(c *gin.Context) {
 		c.JSON(200, gin.H{"message": "🩼 Canepanion Server is running"})
 	})
@@ -29,7 +30,7 @@ func RegisterRoutes(r *gin.Engine, DB *gorm.DB) {
 	// Firmware–Cloud API Routes
 	firmware := v1.Group("/firmware")
 	registerFirmwareAuth(firmware, DB)
-	registerFirmwareTelemetry(firmware, DB)
+	registerFirmwareTelemetry(firmware, DB, notifier)
 	// registerFirmwareAudio(firmware, DB)
 	// registerFirmwareControl(firmware, DB)
 	// registerFirmwareUpdates(firmware, DB)
@@ -61,8 +62,8 @@ func registerFirmwareAuth(r *gin.RouterGroup, DB *gorm.DB) {
 	r.POST("/devices/:deviceId/heartbeat", middleware.DeviceAuthMiddleware(), handler.Heartbeat)
 }
 
-func registerFirmwareTelemetry(r *gin.RouterGroup, DB *gorm.DB) {
-	handler := telemetry.NewHandler(DB)
+func registerFirmwareTelemetry(r *gin.RouterGroup, DB *gorm.DB, notifier push.Notifier) {
+	handler := telemetry.NewHandler(DB, notifier)
 
 	r.POST("/devices/:deviceId/telemetry", middleware.DeviceAuthMiddleware(), handler.Submit)
 }

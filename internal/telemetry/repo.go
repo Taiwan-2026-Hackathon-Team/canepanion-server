@@ -29,6 +29,22 @@ func (r *Repository) FindDeviceByID(deviceID uuid.UUID) (*models.Devices, error)
 	return &device, nil
 }
 
+// FindLatestLocation returns the most recent location recorded for a device,
+// or nil when it has never reported one. Used as a fallback for the push
+// payload: the guardian app discards any fall alert without coordinates, and
+// the firmware omits location when it has no GNSS fix.
+func (r *Repository) FindLatestLocation(deviceID uuid.UUID) (*models.Locations, error) {
+	var location models.Locations
+	err := r.db.Where("device_id = ?", deviceID).Order("recorded_at DESC").First(&location).Error
+	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return &location, nil
+}
+
 func (r *Repository) FindBatchResponse(deviceID uuid.UUID, messageID string) (json.RawMessage, error) {
 	var batch models.IngestionBatches
 	if err := r.db.Where("device_id = ? AND message_id = ?", deviceID, messageID).First(&batch).Error; err != nil {
