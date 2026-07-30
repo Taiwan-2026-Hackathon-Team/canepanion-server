@@ -4,7 +4,7 @@ Content-Type: application/json
 Accept: application/json
 
 {
-  "deviceId": "82547dee-5418-4e85-8ad3-921a50d6d906",
+  "deviceId": "6fdce032-90da-4a27-938b-9b5c367121f4",
   "batteryLevel": 100,
   "firmwareVersion": "1.0.0"
 }
@@ -15,6 +15,6 @@ Content-Type: application/json
 Accept: application/json
 
 {
-  "deviceId": "82547dee-5418-4e85-8ad3-921a50d6d906",
-  "credential": "i0zLoNqbHVHhUo-7IzN3MEf-Ihntf0W_SK09gAGKmoE"
+  "deviceId": "6fdce032-90da-4a27-938b-9b5c367121f4",
+  "credential": "EbUwJUa_Me8p3KchOZOH5xWjtVfzIgv_OkR4cdGqBM8"
 }

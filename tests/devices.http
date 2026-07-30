@@ -1,4 +1,4 @@
-@authToken = paste-jwt-token-from-login-or-register-response-here
+@authToken = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE3ODUzOTUxMDcsInJvbGUiOiJDQU5FX1VTRVIiLCJ1c2VySWQiOiIyYjMwZDJiNi01ZWYyLTRlZGEtYTc5YS0xOGUzMGVlMWM5MDkifQ.t2SoMkuYpDs7JxGHOeivXWGQqdZczBCKHfdyeecA_HI
 
 ### Create a device owned by the logged-in cane user
 
