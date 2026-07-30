@@ -29,7 +29,7 @@ func RegisterRoutes(r *gin.Engine, DB *gorm.DB) {
 	// Firmware–Cloud API Routes
 	firmware := v1.Group("/firmware")
 	registerFirmwareAuth(firmware, DB)
-	// registerFirmwareTelemetry(firmware, DB)
+	registerFirmwareTelemetry(firmware, DB)
 	// registerFirmwareAudio(firmware, DB)
 	// registerFirmwareControl(firmware, DB)
 	// registerFirmwareUpdates(firmware, DB)
@@ -64,7 +64,7 @@ func registerFirmwareAuth(r *gin.RouterGroup, DB *gorm.DB) {
 func registerFirmwareTelemetry(r *gin.RouterGroup, DB *gorm.DB) {
 	handler := telemetry.NewHandler(DB)
 
-	r.POST("/devices/:deviceId/telemetry", handler.Submit)
+	r.POST("/devices/:deviceId/telemetry", middleware.DeviceAuthMiddleware(), handler.Submit)
 }
 
 func registerFirmwareAudio(r *gin.RouterGroup, DB *gorm.DB) {
