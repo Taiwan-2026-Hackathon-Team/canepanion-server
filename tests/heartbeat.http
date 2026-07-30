@@ -1,0 +1,43 @@
+@deviceId = 6fdce032-90da-4a27-938b-9b5c367121f4
+@deviceToken = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhdWQiOiJjYW5lcGFuaW9uLWZpcm13YXJlIiwiZGV2aWNlSWQiOiI2ZmRjZTAzMi05MGRhLTRhMjctOTM4Yi05YjVjMzY3MTIxZjQiLCJleHAiOjE3ODUzODk2MDYsImlhdCI6MTc4NTM4ODcwNiwiaXNzIjoiY2FuZXBhbmlvbi1zZXJ2ZXIiLCJ0b2tlblR5cGUiOiJkZXZpY2UifQ.YGZ-bfV8DczJ40MSNvgz4rLrlLrKN2_8LmzhZFOTD64
+
+### Record a valid device heartbeat
+POST http://localhost:8080/api/v1/firmware/devices/{{deviceId}}/heartbeat
+Authorization: Bearer {{deviceToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "messageId": "heartbeat-{{$guid}}",
+  "recordedAt": "{{$datetime iso8601}}",
+  "batteryLevel": 74,
+  "firmwareVersion": "1.1.2",
+  "status": "ONLINE"
+}
+
+### Validation: Reject an invalid battery level
+POST http://localhost:8080/api/v1/firmware/devices/{{deviceId}}/heartbeat
+Authorization: Bearer {{deviceToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "messageId": "heartbeat-invalid-battery-{{$guid}}",
+  "recordedAt": "{{$datetime iso8601}}",
+  "batteryLevel": 101,
+  "firmwareVersion": "1.4.2",
+  "status": "ONLINE"
+}
+
+### Validation: Reject a request without a device token
+POST http://localhost:8080/api/v1/firmware/devices/{{deviceId}}/heartbeat
+Content-Type: application/json
+Accept: application/json
+
+{
+  "messageId": "heartbeat-no-token-{{$guid}}",
+  "recordedAt": "{{$datetime iso8601}}",
+  "batteryLevel": 74,
+  "firmwareVersion": "1.4.2",
+  "status": "ONLINE"
+}
