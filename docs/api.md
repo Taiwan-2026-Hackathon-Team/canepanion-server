@@ -154,41 +154,35 @@ The server updates `devices.battery_level`, `devices.firmware_version`,
 
 ### Store audio metadata
 
-Audio bytes should be uploaded directly to object storage. The API creates the
-metadata record and controls the `storage_key`; firmware must never choose an
-arbitrary storage key.
+The firmware sends audio to the API as multipart form data. The API validates
+the device and metadata, uploads the file to Cloudinary, and stores its public
+ID as `storage_key`. Files are limited to 25 MB.
 
 `POST /api/v1/firmware/devices/{deviceId}/audio/uploads`
 
-```json
-{
-  "messageId": "01JAZA6VWBWMCBVY7D6Z3Q8F1K",
-  "direction": "USER_TO_ASSISTANT",
-  "contentType": "audio/opus",
-  "byteLength": 48192,
-  "durationMs": 6200,
-  "sha256": "95a5a4f4f77c26bc7dfd74bce683031bc76e24260b82e0c55a12f94d17b5a9d1",
-  "recordedAt": "2026-07-28T08:32:42Z"
-}
+```bash
+curl -X POST \
+  -H "Authorization: Bearer <device-token>" \
+  -F 'metadata={"direction":"USER_TO_ASSISTANT"};type=application/json' \
+  -F 'audio=@sample.opus;type=audio/opus' \
+  http://localhost:8080/api/v1/firmware/devices/<device-id>/audio/uploads
 ```
 
 ```json
 {
   "audioId": "40fb49ee-64fb-4a66-a3fd-c89fcdc097e1",
-  "uploadUrl": "https://object-storage.example/signed-upload",
-  "expiresAt": "2026-07-28T08:47:43Z",
-  "requiredHeaders": {
-    "Content-Type": "audio/opus"
-  }
+  "deviceId": "6fdce032-90da-4a27-938b-9b5c367121f4",
+  "direction": "USER_TO_ASSISTANT",
+  "audioUrl": "https://res.cloudinary.com/example/video/upload/v1/canepanion/devices/.../audio/40fb49ee.opus",
+  "storageKey": "canepanion/devices/6fdce032-90da-4a27-938b-9b5c367121f4/audio/40fb49ee-64fb-4a66-a3fd-c89fcdc097e1",
+  "status": "UPLOADED",
+  "createdAt": "2026-07-28T08:32:43Z"
 }
 ```
 
-After the upload, firmware calls
-`POST /api/v1/firmware/devices/{deviceId}/audio/{audioId}/complete` with the
-same `messageId` and checksum. The upload record begins in
-`PENDING_UPLOAD`; after verifying the object, the server changes it to
-`UPLOADED` and queues processing. `PENDING_UPLOAD` and the additional metadata
-fields require the audio schema extension described below.
+The `metadata` part accepts `USER_TO_ASSISTANT` or `ASSISTANT_TO_USER`. The
+`audio` part must use an `audio/*` content type. The future completion endpoint
+remains disabled until its signed-upload workflow and schema are implemented.
 
 ## Priority 2: Cloud-to-device control
 
