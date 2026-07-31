@@ -31,7 +31,7 @@ func RegisterRoutes(r *gin.Engine, DB *gorm.DB, notifier push.Notifier) {
 	firmware := v1.Group("/firmware")
 	registerFirmwareAuth(firmware, DB)
 	registerFirmwareTelemetry(firmware, DB, notifier)
-	// registerFirmwareAudio(firmware, DB)
+	registerFirmwareAudio(firmware, DB)
 	// registerFirmwareControl(firmware, DB)
 	// registerFirmwareUpdates(firmware, DB)
 }
@@ -72,6 +72,7 @@ func registerFirmwareAudio(r *gin.RouterGroup, DB *gorm.DB) {
 	handler := audio.NewHandler(DB)
 
 	audioGrp := r.Group("/devices/:deviceId/audio")
+	audioGrp.Use(middleware.DeviceAuthMiddleware())
 	{
 		audioGrp.POST("/uploads", handler.CreateUpload)
 		audioGrp.POST("/:audioId/complete", handler.CompleteUpload)

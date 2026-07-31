@@ -1,0 +1,73 @@
+@deviceId = 6fdce032-90da-4a27-938b-9b5c367121f4
+@deviceToken = replace-with-a-current-device-token
+@audioId = replace-with-an-uploaded-audio-id
+
+### Upload an audio recording
+POST http://localhost:8080/api/v1/firmware/devices/{{deviceId}}/audio/uploads
+Authorization: Bearer {{deviceToken}}
+Accept: application/json
+Content-Type: multipart/form-data; boundary=CanepanionAudioBoundary
+
+--CanepanionAudioBoundary
+Content-Disposition: form-data; name="metadata"
+Content-Type: application/json
+
+{
+  "direction": "USER_TO_ASSISTANT"
+}
+--CanepanionAudioBoundary
+Content-Disposition: form-data; name="audio"; filename="sample.opus"
+Content-Type: audio/opus
+
+< /path/to/your/sample.opus
+--CanepanionAudioBoundary--
+
+### Reject an upload without a device token
+POST http://localhost:8080/api/v1/firmware/devices/{{deviceId}}/audio/uploads
+Accept: application/json
+Content-Type: multipart/form-data; boundary=CanepanionAudioBoundary
+
+--CanepanionAudioBoundary
+Content-Disposition: form-data; name="metadata"
+Content-Type: application/json
+
+{
+  "direction": "USER_TO_ASSISTANT"
+}
+--CanepanionAudioBoundary
+Content-Disposition: form-data; name="audio"; filename="sample.opus"
+Content-Type: audio/opus
+
+< /path/to/your/sample.opus
+--CanepanionAudioBoundary--
+
+### Reject a non-audio file
+POST http://localhost:8080/api/v1/firmware/devices/{{deviceId}}/audio/uploads
+Authorization: Bearer {{deviceToken}}
+Content-Type: multipart/form-data; boundary=CanepanionAudioBoundary
+
+--CanepanionAudioBoundary
+Content-Disposition: form-data; name="metadata"
+Content-Type: application/json
+
+{"direction":"USER_TO_ASSISTANT"}
+--CanepanionAudioBoundary
+Content-Disposition: form-data; name="audio"; filename="sample.txt"
+Content-Type: text/plain
+
+< /path/to/your/sample.txt
+--CanepanionAudioBoundary--
+
+### Confirm an audio upload and make it available for processing
+POST http://localhost:8080/api/v1/firmware/devices/{{deviceId}}/audio/{{audioId}}/complete
+Authorization: Bearer {{deviceToken}}
+Accept: application/json
+
+### Reject completion without a device token
+POST http://localhost:8080/api/v1/firmware/devices/{{deviceId}}/audio/{{audioId}}/complete
+Accept: application/json
+
+### Reject completion with an invalid audio ID
+POST http://localhost:8080/api/v1/firmware/devices/{{deviceId}}/audio/not-a-uuid/complete
+Authorization: Bearer {{deviceToken}}
+Accept: application/json
