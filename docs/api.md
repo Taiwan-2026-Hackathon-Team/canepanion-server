@@ -181,8 +181,22 @@ curl -X POST \
 ```
 
 The `metadata` part accepts `USER_TO_ASSISTANT` or `ASSISTANT_TO_USER`. The
-`audio` part must use an `audio/*` content type. The future completion endpoint
-remains disabled until its signed-upload workflow and schema are implemented.
+`audio` part must use an `audio/*` content type.
+
+### Complete an audio upload
+
+`POST /api/v1/firmware/devices/{deviceId}/audio/{audioId}/complete`
+
+The endpoint requires a matching device token and no request body. It
+idempotently transitions an `UPLOADED` recording to `PROCESSING`, making it
+available to an audio-processing worker:
+
+```json
+{
+  "audioId": "40fb49ee-64fb-4a66-a3fd-c89fcdc097e1",
+  "status": "PROCESSING"
+}
+```
 
 ## Priority 2: Cloud-to-device control
 
@@ -213,7 +227,7 @@ Suggested command types include:
 Firmware release responses should provide the version, file size, download URL,
 SHA-256 digest, cryptographic signature, and whether the update is mandatory.
 
-## Recommended implementation order
+## Recommended implementation orde
 
 | Order | Capability | Reason |
 | --- | --- | --- |
@@ -225,7 +239,7 @@ SHA-256 digest, cryptographic signature, and whether the update is mandatory.
 | 6 | Commands and acknowledgements | Enables reliable cloud-to-device actions. |
 | 7 | Firmware updates | Adds controlled remote software delivery after the core protocol is stable. |
 
-## Required API behavior
+## Required API behavio
 
 | Requirement | Recommendation |
 | --- | --- |
