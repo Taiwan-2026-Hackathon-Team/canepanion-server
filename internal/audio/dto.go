@@ -22,5 +22,7 @@ type CreateUploadResponse struct {
 	CreatedAt  time.Time             `json:"createdAt"`
 }
 
-type CompleteUploadRequest struct{}
-type CompleteUploadResponse struct{}
+type CompleteUploadResponse struct {
+	AudioID uuid.UUID          `json:"audioId"`
+	Status  models.AudioStatus `json:"status"`
+}
