@@ -75,7 +75,7 @@ func registerFirmwareAudio(r *gin.RouterGroup, DB *gorm.DB) {
 	audioGrp.Use(middleware.DeviceAuthMiddleware())
 	{
 		audioGrp.POST("/uploads", handler.CreateUpload)
-		// audioGrp.POST("/:audioId/complete", handler.CompleteUpload)
+		audioGrp.POST("/:audioId/complete", handler.CompleteUpload)
 	}
 }
 
