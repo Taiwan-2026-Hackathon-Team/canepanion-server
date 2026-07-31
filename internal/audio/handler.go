@@ -44,9 +44,11 @@ func (h *Handler) CreateUpload(c *gin.Context) {
 }
 
 func (h *Handler) CompleteUpload(c *gin.Context) {
-	notImplemented(c, "complete audio upload")
-}
+	response, err := h.service.CompleteUpload(c.Param("deviceId"), c.Param("audioId"))
+	if err != nil {
+		_ = c.Error(err)
+		return
+	}
 
-func notImplemented(c *gin.Context, operation string) {
-	c.JSON(http.StatusNotImplemented, gin.H{"message": operation + " is not implemented"})
+	c.JSON(http.StatusOK, response)
 }
