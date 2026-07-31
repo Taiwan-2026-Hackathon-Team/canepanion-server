@@ -19,6 +19,8 @@ const maxAudioFileSize int64 = 25 << 20
 type audioRepository interface {
 	FindDeviceByID(deviceID uuid.UUID) (*models.Devices, error)
 	CreateAudio(audio *models.Audio) error
+	FindAudioByID(deviceID, audioID uuid.UUID) (*models.Audio, error)
+	MarkAudioProcessing(deviceID, audioID uuid.UUID) (bool, error)
 }
 
 type audioUploader interface {
@@ -127,6 +129,59 @@ func (s *Service) CreateUpload(
 		StorageKey: audio.StorageKey,
 		Status:     audio.Status,
 		CreatedAt:  audio.CreatedAt,
+	}, nil
+}
+
+func (s *Service) CompleteUpload(deviceIDValue, audioIDValue string) (*CompleteUploadResponse, error) {
+	deviceID, err := utils.ParseId(deviceIDValue)
+	if err != nil {
+		return nil, appErr.NewBadRequest("Invalid device ID", err)
+	}
+	audioID, err := utils.ParseId(audioIDValue)
+	if err != nil {
+		return nil, appErr.NewBadRequest("Invalid audio ID", err)
+	}
+
+	audio, err := s.repo.FindAudioByID(deviceID, audioID)
+	if err != nil {
+		return nil, appErr.NewInternal("Failed to find audio recording", err)
+	}
+	if audio == nil {
+		return nil, appErr.NewNotFound("Audio recording not found", nil)
+	}
+
+	switch audio.Status {
+	case models.AudioStatusUploaded:
+		updated, err := s.repo.MarkAudioProcessing(deviceID, audioID)
+		if err != nil {
+			return nil, appErr.NewInternal("Failed to complete audio upload", err)
+		}
+		if updated {
+			audio.Status = models.AudioStatusProcessing
+			break
+		}
+
+		audio, err = s.repo.FindAudioByID(deviceID, audioID)
+		if err != nil {
+			return nil, appErr.NewInternal("Failed to restore audio recording", err)
+		}
+		if audio == nil {
+			return nil, appErr.NewNotFound("Audio recording not found", nil)
+		}
+		if audio.Status != models.AudioStatusProcessing && audio.Status != models.AudioStatusCompleted {
+			return nil, appErr.NewBadRequest("Audio recording cannot be completed from its current status", nil)
+		}
+	case models.AudioStatusProcessing, models.AudioStatusCompleted:
+		// Completion is idempotent so firmware can safely retry after a timeout.
+	case models.AudioStatusFailed:
+		return nil, appErr.NewBadRequest("Failed audio recording cannot be completed", nil)
+	default:
+		return nil, appErr.NewBadRequest("Audio recording has an invalid status", nil)
+	}
+
+	return &CompleteUploadResponse{
+		AudioID: audio.ID,
+		Status:  audio.Status,
 	}, nil
 }
 
