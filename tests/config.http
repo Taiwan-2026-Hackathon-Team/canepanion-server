@@ -1,0 +1,23 @@
+@deviceId = 6fdce032-90da-4a27-938b-9b5c367121f4
+@deviceToken = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhdWQiOiJjYW5lcGFuaW9uLWZpcm13YXJlIiwiZGV2aWNlSWQiOiI2ZmRjZTAzMi05MGRhLTRhMjctOTM4Yi05YjVjMzY3MTIxZjQiLCJleHAiOjE3ODU2NTA2NTIsImlhdCI6MTc4NTY0OTc1MiwiaXNzIjoiY2FuZXBhbmlvbi1zZXJ2ZXIiLCJ0b2tlblR5cGUiOiJkZXZpY2UifQ.QUMUnOPyL1d1d4e3jTjd7_6f2p8rp9MOW92CSK4U3Nk
+@currentETag = "1"
+
+### Download the current device configuration
+GET http://localhost:8080/api/v1/firmware/devices/{{deviceId}}/config
+Authorization: Bearer {{deviceToken}}
+Accept: application/json
+
+### Return 304 when the cached configuration is current
+GET http://localhost:8080/api/v1/firmware/devices/{{deviceId}}/config
+Authorization: Bearer {{deviceToken}}
+If-None-Match: {{currentETag}}
+Accept: application/json
+
+### Reject a request without a device token
+GET http://localhost:8080/api/v1/firmware/devices/{{deviceId}}/config
+Accept: application/json
+
+### Reject a token for a different device
+GET http://localhost:8080/api/v1/firmware/devices/00000000-0000-0000-0000-000000000000/config
+Authorization: Bearer {{deviceToken}}
+Accept: application/json
