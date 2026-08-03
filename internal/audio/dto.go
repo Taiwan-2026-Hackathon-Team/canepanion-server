@@ -26,3 +26,9 @@ type CompleteUploadResponse struct {
 	AudioID uuid.UUID          `json:"audioId"`
 	Status  models.AudioStatus `json:"status"`
 }
+
+type GetAudioResponse struct {
+	AudioID       uuid.UUID          `json:"audioId"`
+	Status        models.AudioStatus `json:"status"`
+	ReplyAudioURL string             `json:"replyAudioUrl,omitempty"`
+}

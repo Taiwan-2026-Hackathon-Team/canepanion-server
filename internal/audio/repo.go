@@ -47,3 +47,38 @@ func (r *Repository) MarkAudioProcessing(deviceID, audioID uuid.UUID) (bool, err
 		Update("status", models.AudioStatusProcessing)
 	return result.RowsAffected == 1, result.Error
 }
+
+func (r *Repository) MarkAudioFailed(deviceID, audioID uuid.UUID) error {
+	return r.db.Model(&models.Audio{}).
+		Where("id = ? AND device_id = ?", audioID, deviceID).
+		Update("status", models.AudioStatusFailed).Error
+}
+
+func (r *Repository) MarkAudioCompleted(deviceID, audioID uuid.UUID) error {
+	return r.db.Model(&models.Audio{}).
+		Where("id = ? AND device_id = ?", audioID, deviceID).
+		Update("status", models.AudioStatusCompleted).Error
+}
+
+func (r *Repository) UpdateTranscript(deviceID, audioID uuid.UUID, transcript string) error {
+	return r.db.Model(&models.Audio{}).
+		Where("id = ? AND device_id = ?", audioID, deviceID).
+		Update("transcript", transcript).Error
+}
+
+func (r *Repository) FindReplyByParentID(deviceID, parentAudioID uuid.UUID) (*models.Audio, error) {
+	var audio models.Audio
+	err := r.db.Where(
+		"device_id = ? AND parent_audio_id = ? AND direction = ?",
+		deviceID,
+		parentAudioID,
+		models.AudioDirectionAssistantToUser,
+	).First(&audio).Error
+	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return &audio, nil
+}

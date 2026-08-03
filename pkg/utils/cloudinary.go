@@ -1,10 +1,13 @@
 package utils
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"mime/multipart"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -113,4 +116,94 @@ func DeleteAudio(ctx context.Context, publicID string) error {
 	}
 
 	return nil
+}
+
+// AudioDeliveryURL rebuilds the public Cloudinary delivery URL for a public ID.
+func AudioDeliveryURL(publicID string) (string, error) {
+	publicID = strings.TrimSpace(publicID)
+	if publicID == "" {
+		return "", errors.New("Cloudinary public ID is required")
+	}
+
+	cld, err := newCloudinaryClient()
+	if err != nil {
+		return "", err
+	}
+
+	asset, err := cld.Video(publicID)
+	if err != nil {
+		return "", fmt.Errorf("build Cloudinary delivery URL: %w", err)
+	}
+	url, err := asset.String()
+	if err != nil {
+		return "", fmt.Errorf("stringify Cloudinary delivery URL: %w", err)
+	}
+	return url, nil
+}
+
+// DownloadAudioBytes GETs the delivery URL for publicID and returns the body.
+// maxBytes caps the read (use 10 MB for sync STT).
+func DownloadAudioBytes(ctx context.Context, publicID string, maxBytes int64) ([]byte, error) {
+	url, err := AudioDeliveryURL(publicID)
+	if err != nil {
+		return nil, err
+	}
+	if maxBytes <= 0 {
+		maxBytes = 10 << 20
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return nil, err
+	}
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("download Cloudinary audio: %w", err)
+	}
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("download Cloudinary audio %s: %s", url, res.Status)
+	}
+
+	body, err := io.ReadAll(io.LimitReader(res.Body, maxBytes+1))
+	if err != nil {
+		return nil, fmt.Errorf("read Cloudinary audio: %w", err)
+	}
+	if int64(len(body)) > maxBytes {
+		return nil, fmt.Errorf("Cloudinary audio exceeds %d byte limit", maxBytes)
+	}
+	return body, nil
+}
+
+// UploadAudioBytes uploads raw audio bytes (e.g. MP3 reply) to Cloudinary.
+func UploadAudioBytes(ctx context.Context, data []byte, filename, folder string) (secureURL string, publicID string, err error) {
+	if len(data) == 0 {
+		return "", "", errors.New("audio bytes are required")
+	}
+	filename = filepath.Base(strings.TrimSpace(filename))
+	if filename == "" {
+		return "", "", errors.New("audio filename is required")
+	}
+
+	cld, err := newCloudinaryClient()
+	if err != nil {
+		return "", "", err
+	}
+
+	extension := filepath.Ext(filename)
+	publicID = strings.TrimSuffix(filename, extension)
+	if publicID == "" {
+		return "", "", errors.New("audio filename is invalid")
+	}
+
+	uploadResult, err := cld.Upload.Upload(ctx, bytes.NewReader(data), uploader.UploadParams{
+		ResourceType: audioResourceType,
+		PublicID:     publicID,
+		Folder:       strings.Trim(folder, "/"),
+	})
+	if err != nil {
+		return "", "", fmt.Errorf("upload audio bytes to Cloudinary: %w", err)
+	}
+
+	return uploadResult.SecureURL, uploadResult.PublicID, nil
 }

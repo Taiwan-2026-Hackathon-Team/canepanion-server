@@ -14,9 +14,9 @@ type Handler struct {
 	service *Service
 }
 
-func NewHandler(db *gorm.DB) *Handler {
+func NewHandler(db *gorm.DB, pipeline *Pipeline) *Handler {
 	repo := NewRepository(db)
-	service := NewService(repo)
+	service := NewService(repo, pipeline)
 	return &Handler{service: service}
 }
 
@@ -45,6 +45,16 @@ func (h *Handler) CreateUpload(c *gin.Context) {
 
 func (h *Handler) CompleteUpload(c *gin.Context) {
 	response, err := h.service.CompleteUpload(c.Param("deviceId"), c.Param("audioId"))
+	if err != nil {
+		_ = c.Error(err)
+		return
+	}
+
+	c.JSON(http.StatusOK, response)
+}
+
+func (h *Handler) GetAudio(c *gin.Context) {
+	response, err := h.service.GetAudio(c.Param("deviceId"), c.Param("audioId"))
 	if err != nil {
 		_ = c.Error(err)
 		return

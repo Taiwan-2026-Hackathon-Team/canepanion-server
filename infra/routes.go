@@ -16,7 +16,7 @@ import (
 	"gorm.io/gorm"
 )
 
-func RegisterRoutes(r *gin.Engine, DB *gorm.DB, notifier push.Notifier) {
+func RegisterRoutes(r *gin.Engine, DB *gorm.DB, notifier push.Notifier, pipeline *audio.Pipeline) {
 	r.GET("/", func(c *gin.Context) {
 		c.JSON(200, gin.H{"message": "🩼 Canepanion Server is running"})
 	})
@@ -31,7 +31,7 @@ func RegisterRoutes(r *gin.Engine, DB *gorm.DB, notifier push.Notifier) {
 	firmware := v1.Group("/firmware")
 	registerFirmwareAuth(firmware, DB)
 	registerFirmwareTelemetry(firmware, DB, notifier)
-	registerFirmwareAudio(firmware, DB)
+	registerFirmwareAudio(firmware, DB, pipeline)
 	registerFirmwareControl(firmware, DB)
 	// registerFirmwareUpdates(firmware, DB)
 }
@@ -68,14 +68,15 @@ func registerFirmwareTelemetry(r *gin.RouterGroup, DB *gorm.DB, notifier push.No
 	r.POST("/devices/:deviceId/telemetry", middleware.DeviceAuthMiddleware(), handler.Submit)
 }
 
-func registerFirmwareAudio(r *gin.RouterGroup, DB *gorm.DB) {
-	handler := audio.NewHandler(DB)
+func registerFirmwareAudio(r *gin.RouterGroup, DB *gorm.DB, pipeline *audio.Pipeline) {
+	handler := audio.NewHandler(DB, pipeline)
 
 	audioGrp := r.Group("/devices/:deviceId/audio")
 	audioGrp.Use(middleware.DeviceAuthMiddleware())
 	{
 		audioGrp.POST("/uploads", handler.CreateUpload)
 		audioGrp.POST("/:audioId/complete", handler.CompleteUpload)
+		audioGrp.GET("/:audioId", handler.GetAudio)
 	}
 }
 

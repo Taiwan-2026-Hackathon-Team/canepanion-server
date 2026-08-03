@@ -6,6 +6,7 @@ import (
 
 	"canepanion-server/config"
 	"canepanion-server/infra"
+	"canepanion-server/internal/audio"
 	"canepanion-server/internal/push"
 )
 
@@ -25,5 +26,12 @@ func main() {
 		log.Fatalf("Failed to initialize push notifications: %v", err)
 	}
 
-	infra.RunGin(config.CORS(), notifier)
+	// Voice pipeline (STT → Gemini → TTS). Missing Google ADC disables the
+	// pipeline without blocking boot; malformed credentials are fatal.
+	pipeline, err := audio.NewPipeline(context.Background())
+	if err != nil {
+		log.Fatalf("Failed to initialize voice pipeline: %v", err)
+	}
+
+	infra.RunGin(config.CORS(), notifier, pipeline)
 }

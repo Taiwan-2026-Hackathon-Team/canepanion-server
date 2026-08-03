@@ -24,8 +24,9 @@ server atomically creates an alert when the event matches an alert rule.
 | 2 | `POST` | `/api/v1/firmware/session` | Exchange device credentials for a short-lived device token. | — |
 | 3 | `POST` | `/api/v1/firmware/devices/{deviceId}/telemetry` | Receive a batch of sensor events and location samples, including data buffered while offline. | `sensor_events`, `locations`, and conditionally `alerts` |
 | 4 | `POST` | `/api/v1/firmware/devices/{deviceId}/heartbeat` | Update connectivity, battery, firmware version, and last-seen time. | `devices` |
-| 5 | `POST` | `/api/v1/firmware/devices/{deviceId}/audio/uploads` | Register audio metadata and obtain a temporary object-storage upload URL. | `audio` |
-| 6 | `POST` | `/api/v1/firmware/devices/{deviceId}/audio/{audioId}/complete` | Confirm the object upload and make the recording available for processing. | `audio` |
+| 5 | `POST` | `/api/v1/firmware/devices/{deviceId}/audio/uploads` | Upload a voice clip (multipart) to Cloudinary and store metadata. | `audio` |
+| 6 | `POST` | `/api/v1/firmware/devices/{deviceId}/audio/{audioId}/complete` | Mark the clip `PROCESSING` and start the STT → Gemini → TTS background job. | `audio` |
+| 7 | `GET` | `/api/v1/firmware/devices/{deviceId}/audio/{audioId}` | Short-poll user-clip status; when `COMPLETED`, includes `replyAudioUrl`. | `audio` |
 
 The combined telemetry endpoint is preferred over one request per reading
 because a cane may reconnect with several buffered records. Individual event
@@ -188,8 +189,9 @@ The `metadata` part accepts `USER_TO_ASSISTANT` or `ASSISTANT_TO_USER`. The
 `POST /api/v1/firmware/devices/{deviceId}/audio/{audioId}/complete`
 
 The endpoint requires a matching device token and no request body. It
-idempotently transitions an `UPLOADED` recording to `PROCESSING`, making it
-available to an audio-processing worker:
+idempotently transitions an `UPLOADED` recording to `PROCESSING` and starts the
+voice pipeline background job (STT → Vertex Gemini → TTS → reply upload). The
+HTTP response returns immediately; firmware should poll the GET endpoint below.
 
 ```json
 {
@@ -197,6 +199,48 @@ available to an audio-processing worker:
   "status": "PROCESSING"
 }
 ```
+
+Retries are safe: if the clip is already `PROCESSING` or `COMPLETED`, the
+server does not start a second job.
+
+### Poll audio processing status
+
+`GET /api/v1/firmware/devices/{deviceId}/audio/{audioId}`
+
+`{audioId}` is always the **user clip** id (`USER_TO_ASSISTANT`). Requires a
+matching device token. Firmware should poll every **2 seconds** and give up
+after about **60 seconds**, starting after complete returns `PROCESSING`.
+
+While processing:
+
+```json
+{
+  "audioId": "40fb49ee-64fb-4a66-a3fd-c89fcdc097e1",
+  "status": "PROCESSING"
+}
+```
+
+When the spoken reply is ready:
+
+```json
+{
+  "audioId": "40fb49ee-64fb-4a66-a3fd-c89fcdc097e1",
+  "status": "COMPLETED",
+  "replyAudioUrl": "https://res.cloudinary.com/example/video/upload/v1/canepanion/devices/.../audio/reply.mp3"
+}
+```
+
+On hard failure (detail is logged server-side only):
+
+```json
+{
+  "audioId": "40fb49ee-64fb-4a66-a3fd-c89fcdc097e1",
+  "status": "FAILED"
+}
+```
+
+`replyAudioUrl` is present only when `status` is `COMPLETED`. This endpoint does
+not return transcript or assistant text for MVP.
 
 ## Priority 2: Cloud-to-device control
 
