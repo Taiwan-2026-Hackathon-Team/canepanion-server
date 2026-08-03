@@ -187,6 +187,16 @@ func UploadAudioReader(ctx context.Context, r io.Reader, filename, folder string
 	if err != nil {
 		return "", "", fmt.Errorf("upload audio to Cloudinary: %w", err)
 	}
+	// SDK can return err=nil with Error.Message set and empty IDs; also reject empty success.
+	if uploadResult == nil {
+		return "", "", fmt.Errorf("upload audio to Cloudinary: empty result")
+	}
+	if msg := strings.TrimSpace(uploadResult.Error.Message); msg != "" {
+		return "", "", fmt.Errorf("upload audio to Cloudinary: %s", msg)
+	}
+	if strings.TrimSpace(uploadResult.PublicID) == "" || strings.TrimSpace(uploadResult.SecureURL) == "" {
+		return "", "", fmt.Errorf("upload audio to Cloudinary: missing public_id or secure_url")
+	}
 
 	return uploadResult.SecureURL, uploadResult.PublicID, nil
 }
