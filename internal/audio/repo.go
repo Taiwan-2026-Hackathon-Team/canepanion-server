@@ -43,11 +43,34 @@ func (r *Repository) FindAudioByID(deviceID, audioID uuid.UUID) (*models.Audio, 
 	return &audio, nil
 }
 
-func (r *Repository) MarkAudioProcessing(deviceID, audioID uuid.UUID) (bool, error) {
+// ClaimProcessing loads the clip and atomically claims UPLOADED → PROCESSING.
+// claimed is true only for the winner of that transition.
+func (r *Repository) ClaimProcessing(deviceID, audioID uuid.UUID) (*models.Audio, bool, error) {
+	audio, err := r.FindAudioByID(deviceID, audioID)
+	if err != nil || audio == nil {
+		return audio, false, err
+	}
+	if audio.Status != models.AudioStatusUploaded {
+		return audio, false, nil
+	}
+
 	result := r.db.Model(&models.Audio{}).
 		Where("id = ? AND device_id = ? AND status = ?", audioID, deviceID, models.AudioStatusUploaded).
 		Update("status", models.AudioStatusProcessing)
-	return result.RowsAffected == 1, result.Error
+	if result.Error != nil {
+		return nil, false, result.Error
+	}
+	if result.RowsAffected == 1 {
+		audio.Status = models.AudioStatusProcessing
+		return audio, true, nil
+	}
+
+	// Lost the race — reload current state for the idempotent response.
+	audio, err = r.FindAudioByID(deviceID, audioID)
+	if err != nil || audio == nil {
+		return audio, false, err
+	}
+	return audio, false, nil
 }
 
 // MarkAudioFailed transitions PROCESSING → FAILED only.

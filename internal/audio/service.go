@@ -20,7 +20,7 @@ type audioRepository interface {
 	FindDeviceByID(deviceID uuid.UUID) (*models.Devices, error)
 	CreateAudio(audio *models.Audio) error
 	FindAudioByID(deviceID, audioID uuid.UUID) (*models.Audio, error)
-	MarkAudioProcessing(deviceID, audioID uuid.UUID) (bool, error)
+	ClaimProcessing(deviceID, audioID uuid.UUID) (*models.Audio, bool, error)
 	MarkAudioFailed(deviceID, audioID uuid.UUID) error
 	MarkAudioCompleted(deviceID, audioID uuid.UUID) error
 	CreateReplyAndCompleteUser(deviceID, userAudioID uuid.UUID, reply *models.Audio) error
@@ -152,48 +152,24 @@ func (s *Service) CompleteUpload(deviceIDValue, audioIDValue string) (*CompleteU
 		return nil, appErr.NewBadRequest("Invalid audio ID", err)
 	}
 
-	audio, err := s.repo.FindAudioByID(deviceID, audioID)
+	audio, claimed, err := s.repo.ClaimProcessing(deviceID, audioID)
 	if err != nil {
-		return nil, appErr.NewInternal("Failed to find audio recording", err)
+		return nil, appErr.NewInternal("Failed to complete audio upload", err)
 	}
 	if audio == nil {
 		return nil, appErr.NewNotFound("Audio recording not found", nil)
 	}
 
-	startedJob := false
 	switch audio.Status {
-	case models.AudioStatusUploaded:
-		updated, err := s.repo.MarkAudioProcessing(deviceID, audioID)
-		if err != nil {
-			return nil, appErr.NewInternal("Failed to complete audio upload", err)
-		}
-		if updated {
-			audio.Status = models.AudioStatusProcessing
-			if audio.Direction == models.AudioDirectionUserToAssistant {
-				startedJob = true
-			}
-			break
-		}
-
-		audio, err = s.repo.FindAudioByID(deviceID, audioID)
-		if err != nil {
-			return nil, appErr.NewInternal("Failed to restore audio recording", err)
-		}
-		if audio == nil {
-			return nil, appErr.NewNotFound("Audio recording not found", nil)
-		}
-		if audio.Status != models.AudioStatusProcessing && audio.Status != models.AudioStatusCompleted {
-			return nil, appErr.NewBadRequest("Audio recording cannot be completed from its current status", nil)
-		}
 	case models.AudioStatusProcessing, models.AudioStatusCompleted:
-		// Completion is idempotent so firmware can safely retry after a timeout.
+		// Idempotent: claim winner or safe firmware retry.
 	case models.AudioStatusFailed:
 		return nil, appErr.NewBadRequest("Failed audio recording cannot be completed", nil)
 	default:
-		return nil, appErr.NewBadRequest("Audio recording has an invalid status", nil)
+		return nil, appErr.NewBadRequest("Audio recording cannot be completed from its current status", nil)
 	}
 
-	if startedJob {
+	if claimed && audio.Direction == models.AudioDirectionUserToAssistant {
 		if s.voiceJob == nil || !s.voiceJob.Start(deviceID, audioID) {
 			audio.Status = models.AudioStatusFailed
 		}
