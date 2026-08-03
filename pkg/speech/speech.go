@@ -3,8 +3,6 @@ package speech
 import (
 	"context"
 	"fmt"
-	"io"
-	"net/http"
 	"os"
 	"strconv"
 	"strings"
@@ -13,7 +11,8 @@ import (
 	"cloud.google.com/go/speech/apiv1/speechpb"
 )
 
-const maxSyncRecognizeBytes = 10 << 20
+// MaxSyncRecognizeBytes is the Cloud Speech sync Recognize inline limit (~10 MB).
+const MaxSyncRecognizeBytes = 10 << 20
 
 // Client wraps Cloud Speech-to-Text synchronous Recognize.
 type Client struct {
@@ -47,21 +46,22 @@ func (c *Client) Close() error {
 	return c.inner.Close()
 }
 
-// RecognizeOpus downloads audioURL and runs sync Recognize as Ogg Opus.
-func (c *Client) RecognizeOpus(ctx context.Context, audioURL, languageCode string, sampleRateHz int32) (string, error) {
+// Recognize runs sync Recognize on Ogg Opus audio content.
+func (c *Client) Recognize(ctx context.Context, content []byte, languageCode string, sampleRateHz int32) (string, error) {
 	if c == nil || c.inner == nil {
 		return "", fmt.Errorf("speech client is not configured")
+	}
+	if len(content) == 0 {
+		return "", fmt.Errorf("speech content is empty")
+	}
+	if len(content) > MaxSyncRecognizeBytes {
+		return "", fmt.Errorf("audio exceeds %d byte sync Recognize limit", MaxSyncRecognizeBytes)
 	}
 	if languageCode == "" {
 		languageCode = DefaultLanguageCode()
 	}
 	if sampleRateHz == 0 {
 		sampleRateHz = DefaultSampleRateHz()
-	}
-
-	body, err := downloadBytes(ctx, audioURL, maxSyncRecognizeBytes)
-	if err != nil {
-		return "", err
 	}
 
 	resp, err := c.inner.Recognize(ctx, &speechpb.RecognizeRequest{
@@ -71,7 +71,7 @@ func (c *Client) RecognizeOpus(ctx context.Context, audioURL, languageCode strin
 			LanguageCode:    languageCode,
 		},
 		Audio: &speechpb.RecognitionAudio{
-			AudioSource: &speechpb.RecognitionAudio_Content{Content: body},
+			AudioSource: &speechpb.RecognitionAudio_Content{Content: content},
 		},
 	})
 	if err != nil {
@@ -111,27 +111,4 @@ func DefaultSampleRateHz() int32 {
 		return 16000
 	}
 	return int32(n)
-}
-
-func downloadBytes(ctx context.Context, url string, maxBytes int) ([]byte, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
-	if err != nil {
-		return nil, err
-	}
-	res, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("download audio: %w", err)
-	}
-	defer res.Body.Close()
-	if res.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("download audio %s: %s", url, res.Status)
-	}
-	body, err := io.ReadAll(io.LimitReader(res.Body, int64(maxBytes)+1))
-	if err != nil {
-		return nil, fmt.Errorf("read audio body: %w", err)
-	}
-	if len(body) > maxBytes {
-		return nil, fmt.Errorf("audio exceeds %d byte sync Recognize limit", maxBytes)
-	}
-	return body, nil
 }

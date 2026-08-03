@@ -23,6 +23,7 @@ type audioRepository interface {
 	MarkAudioProcessing(deviceID, audioID uuid.UUID) (bool, error)
 	MarkAudioFailed(deviceID, audioID uuid.UUID) error
 	MarkAudioCompleted(deviceID, audioID uuid.UUID) error
+	CreateReplyAndCompleteUser(deviceID, userAudioID uuid.UUID, reply *models.Audio) error
 	UpdateTranscript(deviceID, audioID uuid.UUID, transcript string) error
 	FindReplyByParentID(deviceID, parentAudioID uuid.UUID) (*models.Audio, error)
 }
@@ -55,15 +56,15 @@ func (cloudinaryUploader) Delete(ctx context.Context, publicID string) error {
 type Service struct {
 	repo     audioRepository
 	uploader audioUploader
-	pipeline *Pipeline
+	voiceJob *VoiceJob
 }
 
-func NewService(repo *Repository, pipeline *Pipeline) *Service {
-	return newService(repo, cloudinaryUploader{}, pipeline)
+func NewService(repo *Repository, voiceJob *VoiceJob) *Service {
+	return newService(repo, cloudinaryUploader{}, voiceJob)
 }
 
-func newService(repo audioRepository, uploader audioUploader, pipeline *Pipeline) *Service {
-	return &Service{repo: repo, uploader: uploader, pipeline: pipeline}
+func newService(repo audioRepository, uploader audioUploader, voiceJob *VoiceJob) *Service {
+	return &Service{repo: repo, uploader: uploader, voiceJob: voiceJob}
 }
 
 func (s *Service) CreateUpload(
@@ -193,7 +194,7 @@ func (s *Service) CompleteUpload(deviceIDValue, audioIDValue string) (*CompleteU
 	}
 
 	if startedJob {
-		if !s.startVoiceJob(deviceID, audioID) {
+		if s.voiceJob == nil || !s.voiceJob.Start(deviceID, audioID) {
 			audio.Status = models.AudioStatusFailed
 		}
 	}
@@ -226,6 +227,9 @@ func (s *Service) GetAudio(deviceIDValue, audioIDValue string) (*GetAudioRespons
 		AudioID: audio.ID,
 		Status:  audio.Status,
 	}
+	if audio.Status != models.AudioStatusCompleted {
+		return resp, nil
+	}
 
 	reply, err := s.repo.FindReplyByParentID(deviceID, audioID)
 	if err != nil {
@@ -239,12 +243,6 @@ func (s *Service) GetAudio(deviceIDValue, audioIDValue string) (*GetAudioRespons
 	if err != nil {
 		return nil, appErr.NewInternal("Failed to build reply audio URL", err)
 	}
-
-	// Reply row is the source of truth for readiness; heal a missed COMPLETED flip.
-	if audio.Status != models.AudioStatusCompleted {
-		_ = s.repo.MarkAudioCompleted(deviceID, audioID)
-	}
-	resp.Status = models.AudioStatusCompleted
 	resp.ReplyAudioURL = url
 	return resp, nil
 }

@@ -12,7 +12,7 @@ import (
 	"canepanion-server/middleware"
 )
 
-func RunGin(config cors.Config, notifier push.Notifier, pipeline *audio.Pipeline) {
+func RunGin(config cors.Config, notifier push.Notifier, voiceJob *audio.VoiceJob) {
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "8080"
@@ -31,7 +31,7 @@ func RunGin(config cors.Config, notifier push.Notifier, pipeline *audio.Pipeline
 
 	r.Use(middleware.ErrorHandler())
 
-	RegisterRoutes(r, DB, notifier, pipeline)
+	RegisterRoutes(r, DB, notifier, voiceJob)
 
 	err := r.Run("0.0.0.0:" + port)
 	if err != nil {

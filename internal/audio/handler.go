@@ -14,9 +14,13 @@ type Handler struct {
 	service *Service
 }
 
-func NewHandler(db *gorm.DB, pipeline *Pipeline) *Handler {
+func NewHandler(db *gorm.DB, voiceJob *VoiceJob) *Handler {
 	repo := NewRepository(db)
-	service := NewService(repo, pipeline)
+	if voiceJob == nil {
+		voiceJob = &VoiceJob{}
+	}
+	voiceJob.bind(repo)
+	service := NewService(repo, voiceJob)
 	return &Handler{service: service}
 }
 

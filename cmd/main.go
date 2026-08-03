@@ -27,11 +27,11 @@ func main() {
 	}
 
 	// Voice pipeline (STT → Gemini → TTS). Missing Google ADC disables the
-	// pipeline without blocking boot; malformed credentials are fatal.
-	pipeline, err := audio.NewPipeline(context.Background())
+	// job without blocking boot; malformed credentials are fatal.
+	voiceJob, err := audio.NewVoiceJob(context.Background())
 	if err != nil {
 		log.Fatalf("Failed to initialize voice pipeline: %v", err)
 	}
 
-	infra.RunGin(config.CORS(), notifier, pipeline)
+	infra.RunGin(config.CORS(), notifier, voiceJob)
 }

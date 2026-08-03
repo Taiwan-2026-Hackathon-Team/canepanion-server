@@ -1,6 +1,8 @@
 package audio
 
 import (
+	"fmt"
+
 	"canepanion-server/models"
 
 	"github.com/google/uuid"
@@ -48,16 +50,38 @@ func (r *Repository) MarkAudioProcessing(deviceID, audioID uuid.UUID) (bool, err
 	return result.RowsAffected == 1, result.Error
 }
 
+// MarkAudioFailed transitions PROCESSING → FAILED only.
 func (r *Repository) MarkAudioFailed(deviceID, audioID uuid.UUID) error {
 	return r.db.Model(&models.Audio{}).
-		Where("id = ? AND device_id = ?", audioID, deviceID).
+		Where("id = ? AND device_id = ? AND status = ?", audioID, deviceID, models.AudioStatusProcessing).
 		Update("status", models.AudioStatusFailed).Error
 }
 
+// MarkAudioCompleted transitions PROCESSING → COMPLETED only.
 func (r *Repository) MarkAudioCompleted(deviceID, audioID uuid.UUID) error {
 	return r.db.Model(&models.Audio{}).
-		Where("id = ? AND device_id = ?", audioID, deviceID).
+		Where("id = ? AND device_id = ? AND status = ?", audioID, deviceID, models.AudioStatusProcessing).
 		Update("status", models.AudioStatusCompleted).Error
+}
+
+// CreateReplyAndCompleteUser inserts the assistant reply and marks the user
+// clip COMPLETED in one transaction.
+func (r *Repository) CreateReplyAndCompleteUser(deviceID, userAudioID uuid.UUID, reply *models.Audio) error {
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Create(reply).Error; err != nil {
+			return err
+		}
+		result := tx.Model(&models.Audio{}).
+			Where("id = ? AND device_id = ? AND status = ?", userAudioID, deviceID, models.AudioStatusProcessing).
+			Update("status", models.AudioStatusCompleted)
+		if result.Error != nil {
+			return result.Error
+		}
+		if result.RowsAffected != 1 {
+			return fmt.Errorf("user clip is not PROCESSING")
+		}
+		return nil
+	})
 }
 
 func (r *Repository) UpdateTranscript(deviceID, audioID uuid.UUID, transcript string) error {
