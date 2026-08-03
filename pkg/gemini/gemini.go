@@ -60,11 +60,6 @@ func NewClient(ctx context.Context) (*Client, error) {
 	return &Client{inner: inner, model: model}, nil
 }
 
-func (c *Client) Close() error {
-	// genai.Client has no Close in current SDK; keep for symmetry.
-	return nil
-}
-
 // GenerateReply runs system instruction + transcript and returns assistant text.
 func (c *Client) GenerateReply(ctx context.Context, transcript string) (string, error) {
 	if c == nil || c.inner == nil {

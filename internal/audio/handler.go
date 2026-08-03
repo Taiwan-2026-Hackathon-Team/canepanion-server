@@ -17,7 +17,12 @@ type Handler struct {
 func NewHandler(db *gorm.DB, voiceJob *VoiceJob) *Handler {
 	repo := NewRepository(db)
 	if voiceJob == nil {
-		voiceJob = &VoiceJob{}
+		voiceJob = &VoiceJob{
+			speech:  DisabledTranscriber{},
+			gemini:  DisabledReplier{},
+			tts:     DisabledSpeaker{},
+			enabled: false,
+		}
 	}
 	voiceJob.bind(repo)
 	service := NewService(repo, voiceJob)

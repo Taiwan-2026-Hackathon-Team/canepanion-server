@@ -59,35 +59,10 @@ func UploadAudio(
 	if file == nil {
 		return "", "", errors.New("audio file is required")
 	}
-
 	if fileHeader == nil {
 		return "", "", errors.New("audio file header is required")
 	}
-
-	cld, err := newCloudinaryClient()
-	if err != nil {
-		return "", "", err
-	}
-
-	// Remove directories and the extension from the uploaded filename
-	filename := filepath.Base(fileHeader.Filename)
-	extension := filepath.Ext(filename)
-	publicID = strings.TrimSuffix(filename, extension)
-
-	if publicID == "" {
-		return "", "", errors.New("audio filename is invalid")
-	}
-
-	uploadResult, err := cld.Upload.Upload(ctx, file, uploader.UploadParams{
-		ResourceType: audioResourceType,
-		PublicID:     publicID,
-		Folder:       strings.Trim(folder, "/"),
-	})
-	if err != nil {
-		return "", "", fmt.Errorf("upload audio to Cloudinary: %w", err)
-	}
-
-	return uploadResult.SecureURL, uploadResult.PublicID, nil
+	return UploadAudioReader(ctx, file, fileHeader.Filename, folder)
 }
 
 func DeleteAudio(ctx context.Context, publicID string) error {
@@ -180,14 +155,17 @@ func UploadAudioBytes(ctx context.Context, data []byte, filename, folder string)
 	if len(data) == 0 {
 		return "", "", errors.New("audio bytes are required")
 	}
+	return UploadAudioReader(ctx, bytes.NewReader(data), filename, folder)
+}
+
+// UploadAudioReader uploads audio from an io.Reader to Cloudinary.
+func UploadAudioReader(ctx context.Context, r io.Reader, filename, folder string) (secureURL string, publicID string, err error) {
+	if r == nil {
+		return "", "", errors.New("audio reader is required")
+	}
 	filename = filepath.Base(strings.TrimSpace(filename))
 	if filename == "" {
 		return "", "", errors.New("audio filename is required")
-	}
-
-	cld, err := newCloudinaryClient()
-	if err != nil {
-		return "", "", err
 	}
 
 	extension := filepath.Ext(filename)
@@ -196,13 +174,18 @@ func UploadAudioBytes(ctx context.Context, data []byte, filename, folder string)
 		return "", "", errors.New("audio filename is invalid")
 	}
 
-	uploadResult, err := cld.Upload.Upload(ctx, bytes.NewReader(data), uploader.UploadParams{
+	cld, err := newCloudinaryClient()
+	if err != nil {
+		return "", "", err
+	}
+
+	uploadResult, err := cld.Upload.Upload(ctx, r, uploader.UploadParams{
 		ResourceType: audioResourceType,
 		PublicID:     publicID,
 		Folder:       strings.Trim(folder, "/"),
 	})
 	if err != nil {
-		return "", "", fmt.Errorf("upload audio bytes to Cloudinary: %w", err)
+		return "", "", fmt.Errorf("upload audio to Cloudinary: %w", err)
 	}
 
 	return uploadResult.SecureURL, uploadResult.PublicID, nil

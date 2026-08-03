@@ -19,17 +19,6 @@ type Client struct {
 	inner *speechapi.Client
 }
 
-// CredentialsConfigured reports whether GOOGLE_APPLICATION_CREDENTIALS points
-// at a readable file (ADC for Speech / TTS / Vertex).
-func CredentialsConfigured() bool {
-	path := strings.TrimSpace(os.Getenv("GOOGLE_APPLICATION_CREDENTIALS"))
-	if path == "" {
-		return false
-	}
-	_, err := os.Stat(path)
-	return err == nil
-}
-
 // NewClient builds a Speech client via Application Default Credentials.
 func NewClient(ctx context.Context) (*Client, error) {
 	inner, err := speechapi.NewClient(ctx)

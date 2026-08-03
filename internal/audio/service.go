@@ -25,6 +25,8 @@ type audioRepository interface {
 	MarkAudioCompleted(deviceID, audioID uuid.UUID) error
 	CreateReplyAndCompleteUser(deviceID, userAudioID uuid.UUID, reply *models.Audio) error
 	UpdateTranscript(deviceID, audioID uuid.UUID, transcript string) error
+	UpdateReplyResponseText(deviceID, replyID uuid.UUID, responseText string) error
+	AttachReplyStorageAndCompleteUser(deviceID, userAudioID, replyID uuid.UUID, storageKey string) error
 	FindReplyByParentID(deviceID, parentAudioID uuid.UUID) (*models.Audio, error)
 }
 

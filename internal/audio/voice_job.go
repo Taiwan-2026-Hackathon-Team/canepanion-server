@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"strings"
 	"time"
 
 	"canepanion-server/models"
@@ -21,20 +22,25 @@ const voiceJobTimeout = 90 * time.Second
 // status transitions for user clips. Missing Google ADC yields a disabled job
 // so the server still boots (FCM-style degrade).
 type VoiceJob struct {
-	repo   audioRepository
-	speech *speech.Client
-	gemini *gemini.Client
-	tts    *tts.Client
+	repo    audioRepository
+	speech  Transcriber
+	gemini  Replier
+	tts     Speaker
+	enabled bool
 }
 
 // NewVoiceJob builds Google clients from ADC. Missing credentials yield a
 // disabled job and no error so the server still boots.
 func NewVoiceJob(ctx context.Context) (*VoiceJob, error) {
-	if !speech.CredentialsConfigured() {
-		path := "GOOGLE_APPLICATION_CREDENTIALS"
-		log.Printf("voice: %s is unset or unreadable", path)
+	if !googleCredentialsConfigured() {
+		log.Printf("voice: GOOGLE_APPLICATION_CREDENTIALS is unset or unreadable")
 		log.Println("voice: voice pipeline disabled; upload/complete still accept audio")
-		return &VoiceJob{}, nil
+		return &VoiceJob{
+			speech:  DisabledTranscriber{},
+			gemini:  DisabledReplier{},
+			tts:     DisabledSpeaker{},
+			enabled: false,
+		}, nil
 	}
 
 	speechClient, err := speech.NewClient(ctx)
@@ -49,15 +55,15 @@ func NewVoiceJob(ctx context.Context) (*VoiceJob, error) {
 	ttsClient, err := tts.NewClient(ctx)
 	if err != nil {
 		_ = speechClient.Close()
-		_ = geminiClient.Close()
 		return nil, fmt.Errorf("initialize tts client: %w", err)
 	}
 
 	log.Println("voice: pipeline enabled (Speech + Vertex Gemini + TTS)")
 	return &VoiceJob{
-		speech: speechClient,
-		gemini: geminiClient,
-		tts:    ttsClient,
+		speech:  speechClient,
+		gemini:  geminiClient,
+		tts:     ttsClient,
+		enabled: true,
 	}, nil
 }
 
@@ -69,9 +75,9 @@ func (j *VoiceJob) bind(repo audioRepository) {
 	j.repo = repo
 }
 
-// Enabled reports whether all Google clients are available.
+// Enabled reports whether Google clients are wired for real delivery.
 func (j *VoiceJob) Enabled() bool {
-	return j != nil && j.speech != nil && j.gemini != nil && j.tts != nil
+	return j != nil && j.enabled
 }
 
 // Start runs the pipeline in the background. When the job is disabled it marks
@@ -122,29 +128,13 @@ func (j *VoiceJob) run(ctx context.Context, deviceID, audioID uuid.UUID) error {
 	if err != nil {
 		return fmt.Errorf("lookup existing reply: %w", err)
 	}
-	if existing != nil && existing.StorageKey != "" {
-		if err := j.repo.MarkAudioCompleted(deviceID, audioID); err != nil {
-			return fmt.Errorf("mark completed after existing reply: %w", err)
-		}
-		return nil
+	if existing != nil {
+		return j.resumeOrFinishReply(ctx, deviceID, audioID, audio, existing)
 	}
 
-	content, err := utils.DownloadAudioBytes(ctx, audio.StorageKey, speech.MaxSyncRecognizeBytes)
+	transcript, err := j.ensureTranscript(ctx, deviceID, audioID, audio)
 	if err != nil {
-		return fmt.Errorf("download user audio: %w", err)
-	}
-
-	transcript, err := j.speech.Recognize(
-		ctx,
-		content,
-		speech.DefaultLanguageCode(),
-		speech.DefaultSampleRateHz(),
-	)
-	if err != nil {
-		return fmt.Errorf("stt: %w", err)
-	}
-	if err := j.repo.UpdateTranscript(deviceID, audioID, transcript); err != nil {
-		return fmt.Errorf("save transcript: %w", err)
+		return err
 	}
 
 	replyText, err := j.gemini.GenerateReply(ctx, transcript)
@@ -152,18 +142,9 @@ func (j *VoiceJob) run(ctx context.Context, deviceID, audioID uuid.UUID) error {
 		return fmt.Errorf("gemini: %w", err)
 	}
 
-	appLang := tts.DetectAppLang(replyText)
-	mp3, err := j.tts.Synthesize(ctx, replyText, appLang)
+	replyID, publicID, err := j.synthesizeAndUpload(ctx, deviceID, uuid.Nil, replyText)
 	if err != nil {
-		return fmt.Errorf("tts: %w", err)
-	}
-
-	replyID := utils.GenerateUUID()
-	folder := fmt.Sprintf("canepanion/devices/%s/audio", deviceID)
-	filename := replyID.String() + ".mp3"
-	_, publicID, err := utils.UploadAudioBytes(ctx, mp3, filename, folder)
-	if err != nil {
-		return fmt.Errorf("upload reply audio: %w", err)
+		return err
 	}
 
 	parentID := audioID
@@ -180,7 +161,7 @@ func (j *VoiceJob) run(ctx context.Context, deviceID, audioID uuid.UUID) error {
 		_ = utils.DeleteAudio(context.WithoutCancel(ctx), publicID)
 		// Unique parent_audio_id: another worker may have finished first.
 		existing, lookupErr := j.repo.FindReplyByParentID(deviceID, audioID)
-		if lookupErr == nil && existing != nil {
+		if lookupErr == nil && existing != nil && existing.StorageKey != "" {
 			if err := j.repo.MarkAudioCompleted(deviceID, audioID); err != nil {
 				return fmt.Errorf("mark completed after concurrent reply: %w", err)
 			}
@@ -189,4 +170,107 @@ func (j *VoiceJob) run(ctx context.Context, deviceID, audioID uuid.UUID) error {
 		return fmt.Errorf("save reply audio: %w", err)
 	}
 	return nil
+}
+
+// resumeOrFinishReply short-circuits when a reply row already exists for the
+// parent: finish COMPLETED if audio is present, otherwise resume from stored
+// response_text (or STT/Gemini when still missing) without creating a second reply.
+func (j *VoiceJob) resumeOrFinishReply(
+	ctx context.Context,
+	deviceID, audioID uuid.UUID,
+	user *models.Audio,
+	reply *models.Audio,
+) error {
+	if reply.StorageKey != "" {
+		if err := j.repo.MarkAudioCompleted(deviceID, audioID); err != nil {
+			return fmt.Errorf("mark completed after existing reply: %w", err)
+		}
+		return nil
+	}
+
+	replyText := strings.TrimSpace(derefString(reply.ResponseText))
+	if replyText == "" {
+		transcript, err := j.ensureTranscript(ctx, deviceID, audioID, user)
+		if err != nil {
+			return err
+		}
+		replyText, err = j.gemini.GenerateReply(ctx, transcript)
+		if err != nil {
+			return fmt.Errorf("gemini: %w", err)
+		}
+		if err := j.repo.UpdateReplyResponseText(deviceID, reply.ID, replyText); err != nil {
+			return fmt.Errorf("save reply text: %w", err)
+		}
+	}
+
+	_, publicID, err := j.synthesizeAndUpload(ctx, deviceID, reply.ID, replyText)
+	if err != nil {
+		return err
+	}
+	if err := j.repo.AttachReplyStorageAndCompleteUser(deviceID, audioID, reply.ID, publicID); err != nil {
+		_ = utils.DeleteAudio(context.WithoutCancel(ctx), publicID)
+		return fmt.Errorf("attach reply audio: %w", err)
+	}
+	return nil
+}
+
+func (j *VoiceJob) ensureTranscript(
+	ctx context.Context,
+	deviceID, audioID uuid.UUID,
+	user *models.Audio,
+) (string, error) {
+	transcript := strings.TrimSpace(derefString(user.Transcript))
+	if transcript != "" {
+		return transcript, nil
+	}
+
+	content, err := utils.DownloadAudioBytes(ctx, user.StorageKey, speech.MaxSyncRecognizeBytes)
+	if err != nil {
+		return "", fmt.Errorf("download user audio: %w", err)
+	}
+	transcript, err = j.speech.Recognize(
+		ctx,
+		content,
+		speech.DefaultLanguageCode(),
+		speech.DefaultSampleRateHz(),
+	)
+	if err != nil {
+		return "", fmt.Errorf("stt: %w", err)
+	}
+	if err := j.repo.UpdateTranscript(deviceID, audioID, transcript); err != nil {
+		return "", fmt.Errorf("save transcript: %w", err)
+	}
+	return transcript, nil
+}
+
+// synthesizeAndUpload runs TTS and uploads MP3. When replyID is uuid.Nil a new
+// id is generated for the Cloudinary filename; otherwise that id is reused.
+func (j *VoiceJob) synthesizeAndUpload(
+	ctx context.Context,
+	deviceID, replyID uuid.UUID,
+	replyText string,
+) (uuid.UUID, string, error) {
+	appLang := tts.DetectAppLang(replyText)
+	mp3, err := j.tts.Synthesize(ctx, replyText, appLang)
+	if err != nil {
+		return uuid.Nil, "", fmt.Errorf("tts: %w", err)
+	}
+
+	if replyID == uuid.Nil {
+		replyID = utils.GenerateUUID()
+	}
+	folder := fmt.Sprintf("canepanion/devices/%s/audio", deviceID)
+	filename := replyID.String() + ".mp3"
+	_, publicID, err := utils.UploadAudioBytes(ctx, mp3, filename, folder)
+	if err != nil {
+		return uuid.Nil, "", fmt.Errorf("upload reply audio: %w", err)
+	}
+	return replyID, publicID, nil
+}
+
+func derefString(v *string) string {
+	if v == nil {
+		return ""
+	}
+	return *v
 }

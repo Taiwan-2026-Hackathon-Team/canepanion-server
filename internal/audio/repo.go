@@ -113,6 +113,51 @@ func (r *Repository) UpdateTranscript(deviceID, audioID uuid.UUID, transcript st
 		Update("transcript", transcript).Error
 }
 
+func (r *Repository) UpdateReplyResponseText(deviceID, replyID uuid.UUID, responseText string) error {
+	return r.db.Model(&models.Audio{}).
+		Where(
+			"id = ? AND device_id = ? AND direction = ?",
+			replyID,
+			deviceID,
+			models.AudioDirectionAssistantToUser,
+		).
+		Update("response_text", responseText).Error
+}
+
+// AttachReplyStorageAndCompleteUser sets the reply storage_key and marks the
+// user clip COMPLETED in one transaction (partial-reply resume path).
+func (r *Repository) AttachReplyStorageAndCompleteUser(
+	deviceID, userAudioID, replyID uuid.UUID,
+	storageKey string,
+) error {
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		result := tx.Model(&models.Audio{}).
+			Where(
+				"id = ? AND device_id = ? AND direction = ? AND storage_key = ''",
+				replyID,
+				deviceID,
+				models.AudioDirectionAssistantToUser,
+			).
+			Update("storage_key", storageKey)
+		if result.Error != nil {
+			return result.Error
+		}
+		if result.RowsAffected != 1 {
+			return fmt.Errorf("reply audio is not awaiting storage")
+		}
+		result = tx.Model(&models.Audio{}).
+			Where("id = ? AND device_id = ? AND status = ?", userAudioID, deviceID, models.AudioStatusProcessing).
+			Update("status", models.AudioStatusCompleted)
+		if result.Error != nil {
+			return result.Error
+		}
+		if result.RowsAffected != 1 {
+			return fmt.Errorf("user clip is not PROCESSING")
+		}
+		return nil
+	})
+}
+
 func (r *Repository) FindReplyByParentID(deviceID, parentAudioID uuid.UUID) (*models.Audio, error) {
 	var audio models.Audio
 	err := r.db.Where(
