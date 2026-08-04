@@ -157,7 +157,15 @@ The server updates `devices.battery_level`, `devices.firmware_version`,
 
 The firmware sends audio to the API as multipart form data. The API validates
 the device and metadata, uploads the file to Cloudinary, and stores its public
-ID as `storage_key`. Files are limited to 25 MB.
+ID as `storage_key`. The upload API accepts files up to **25 MB**.
+
+For the **voice reply pipeline** (`USER_TO_ASSISTANT` → complete → poll), keep
+user clips at or under **~10 MB**. Sync Speech-to-Text rejects larger content;
+oversized clips that upload successfully still become `FAILED` after complete.
+Record **Ogg Opus at 16000 Hz** with Content-Type `audio/opus`. The server STT
+always uses `STT_SAMPLE_RATE_HZ` or **16000**; it does not read the file’s rate.
+STT language defaults to `zh-TW` (`VOICE_LANGUAGE`). Empty or unrecognized
+speech fails the job (`FAILED`).
 
 `POST /api/v1/firmware/devices/{deviceId}/audio/uploads`
 
@@ -182,16 +190,20 @@ curl -X POST \
 ```
 
 The `metadata` part accepts `USER_TO_ASSISTANT` or `ASSISTANT_TO_USER`. The
-`audio` part must use an `audio/*` content type.
+`audio` part must use an `audio/*` content type. Device token TTL is
+**15 minutes** (`POST /api/v1/firmware/session` to refresh). Path `{deviceId}`
+must match the token’s device (**403** on mismatch); missing/invalid/expired
+token returns **401**.
 
 ### Complete an audio upload
 
 `POST /api/v1/firmware/devices/{deviceId}/audio/{audioId}/complete`
 
 The endpoint requires a matching device token and no request body. It
-idempotently transitions an `UPLOADED` recording to `PROCESSING` and starts the
-voice pipeline background job (STT → Vertex Gemini → TTS → reply upload). The
-HTTP response returns immediately; firmware should poll the GET endpoint below.
+transitions an `UPLOADED` recording to `PROCESSING` and starts the voice
+pipeline background job (STT → Vertex Gemini → TTS → reply upload). The HTTP
+response is **200** with body `{ audioId, status }` only — no `replyAudioUrl`.
+Firmware must read the body `status`, not assume success from HTTP 200 alone.
 
 ```json
 {
@@ -200,8 +212,16 @@ HTTP response returns immediately; firmware should poll the GET endpoint below.
 }
 ```
 
-Retries are safe: if the clip is already `PROCESSING` or `COMPLETED`, the
-server does not start a second job.
+| Body `status` | Firmware action |
+| --- | --- |
+| `PROCESSING` | Start polling GET below. |
+| `COMPLETED` | Rare / idempotent. Complete has no URL — poll once or GET for `replyAudioUrl`. |
+| `FAILED` | Hard stop. Do **not** poll. Start a new upload (new `audioId`) for another turn. |
+
+Idempotent retries: if the clip is already `PROCESSING` or `COMPLETED`, the
+server does not start a second job. Completing a clip that is already `FAILED`
+returns **400** — not safe to retry; upload a new clip. If GET later shows
+`UPLOADED`, complete was never applied — call complete or abort; do not play.
 
 ### Poll audio processing status
 
@@ -209,7 +229,8 @@ server does not start a second job.
 
 `{audioId}` is always the **user clip** id (`USER_TO_ASSISTANT`). Requires a
 matching device token. Firmware should poll every **2 seconds** and give up
-after about **60 seconds**, starting after complete returns `PROCESSING`.
+after about **90 seconds** (aligned with the server voice job timeout),
+starting only after complete returns `PROCESSING`.
 
 While processing:
 
@@ -239,8 +260,10 @@ On hard failure (detail is logged server-side only):
 }
 ```
 
-`replyAudioUrl` is present only when `status` is `COMPLETED`. This endpoint does
-not return transcript or assistant text for MVP.
+Play only when `status` is `COMPLETED` **and** `replyAudioUrl` is present and
+non-empty. If `COMPLETED` without a URL, treat as failure and stop — do not
+poll forever. `replyAudioUrl` is omitted unless a reply file exists. This
+endpoint does not return transcript or assistant text for MVP.
 
 ## Priority 2: Cloud-to-device control
 
