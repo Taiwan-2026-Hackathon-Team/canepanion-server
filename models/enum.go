@@ -16,6 +16,26 @@ const (
 	DeviceStatusInactive DeviceStatus = "INACTIVE"
 )
 
+type DeviceCommandType string
+
+const (
+	DeviceCommandTypePlayMessage       DeviceCommandType = "PLAY_MESSAGE"
+	DeviceCommandTypeRequestLocation   DeviceCommandType = "REQUEST_LOCATION"
+	DeviceCommandTypeStartAudioCapture DeviceCommandType = "START_AUDIO_CAPTURE"
+	DeviceCommandTypeUpdateConfig      DeviceCommandType = "UPDATE_CONFIG"
+	DeviceCommandTypeReboot            DeviceCommandType = "REBOOT"
+	DeviceCommandTypeFirmwareUpdate    DeviceCommandType = "FIRMWARE_UPDATE"
+)
+
+type DeviceCommandStatus string
+
+const (
+	DeviceCommandStatusPending   DeviceCommandStatus = "PENDING"
+	DeviceCommandStatusReceived  DeviceCommandStatus = "RECEIVED"
+	DeviceCommandStatusCompleted DeviceCommandStatus = "COMPLETED"
+	DeviceCommandStatusFailed    DeviceCommandStatus = "FAILED"
+)
+
 type AudioDirection string
 
 const (

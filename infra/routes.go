@@ -86,7 +86,7 @@ func registerFirmwareControl(r *gin.RouterGroup, DB *gorm.DB) {
 	deviceGrp := r.Group("/devices/:deviceId", middleware.DeviceAuthMiddleware())
 	{
 		deviceGrp.GET("/config", handler.GetConfig)
-
+		deviceGrp.GET("/commands", handler.ListCommands)
 	}
 }
 
