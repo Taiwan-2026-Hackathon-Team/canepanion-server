@@ -4,6 +4,8 @@ import (
 	"net/http"
 	"strings"
 
+	http_helper "canepanion-server/pkg/http"
+
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )
@@ -50,7 +52,19 @@ func matchesETag(ifNoneMatch, currentETag string) bool {
 }
 
 func (h *Handler) ListCommands(c *gin.Context) {
-	notImplemented(c, "list device commands")
+	query, err := http_helper.BindQuery[ListCommandsQuery](c)
+	if err != nil {
+		_ = c.Error(err)
+		return
+	}
+
+	response, err := h.service.ListCommands(c.Param("deviceId"), query)
+	if err != nil {
+		_ = c.Error(err)
+		return
+	}
+
+	c.JSON(http.StatusOK, response)
 }
 
 func (h *Handler) AcknowledgeCommand(c *gin.Context) {
