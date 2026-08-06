@@ -1,0 +1,12 @@
+@deviceId = 6fdce032-90da-4a27-938b-9b5c367121f4
+@deviceToken = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhdWQiOiJjYW5lcGFuaW9uLWZpcm13YXJlIiwiZGV2aWNlSWQiOiI2ZmRjZTAzMi05MGRhLTRhMjctOTM4Yi05YjVjMzY3MTIxZjQiLCJleHAiOjE3ODYwMDI2NDgsImlhdCI6MTc4NjAwMTc0OCwiaXNzIjoiY2FuZXBhbmlvbi1zZXJ2ZXIiLCJ0b2tlblR5cGUiOiJkZXZpY2UifQ.s4je3mXSvwqXy5uaK1xxYeeBl5RZnNalMSqs94o7_R4
+
+### Poll pending commands using the default page size
+GET http://localhost:8080/api/v1/firmware/devices/{{deviceId}}/commands
+Accept: application/json
+Authorization: Bearer {{deviceToken}}
+
+### Poll the next page using nextCursor from the previous response
+GET http://localhost:8080/api/v1/firmware/devices/{{deviceId}}/commands?limit=25&cursor=replace-with-next-cursor
+Accept: application/json
+Authorization: Bearer {{deviceToken}}
