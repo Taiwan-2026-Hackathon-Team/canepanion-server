@@ -1,6 +1,8 @@
 package devicecontrol
 
 import (
+	"time"
+
 	"canepanion-server/models"
 
 	"github.com/google/uuid"
@@ -15,6 +17,10 @@ func NewRepository(db *gorm.DB) *Repository {
 	return &Repository{db: db}
 }
 
+type commandCursor struct {
+	CreatedAt time.Time
+	ID        uuid.UUID
+}
 
 func (r *Repository) FindConfigurationByDeviceID(deviceID uuid.UUID) (*DeviceConfiguration, error) {
 	var config DeviceConfiguration
@@ -30,4 +36,36 @@ func (r *Repository) FindConfigurationByDeviceID(deviceID uuid.UUID) (*DeviceCon
 	}
 
 	return &config, nil
+}
+
+func (r *Repository) FindPendingCommands(
+	deviceID uuid.UUID,
+	cursor *commandCursor,
+	limit int,
+	now time.Time,
+) ([]models.DeviceCommands, bool, error) {
+	var deviceCount int64
+	if err := r.db.Model(&models.Devices{}).Where("id = ?", deviceID).Count(&deviceCount).Error; err != nil {
+		return nil, false, err
+	}
+	if deviceCount == 0 {
+		return nil, false, nil
+	}
+
+	query := r.db.Model(&models.DeviceCommands{}).
+		Where("device_id = ? AND status = ? AND expires_at > ?", deviceID, models.DeviceCommandStatusPending, now)
+	if cursor != nil {
+		query = query.Where(
+			"created_at > ? OR (created_at = ? AND id > ?)",
+			cursor.CreatedAt, cursor.CreatedAt, cursor.ID,
+		)
+	}
+
+	var commands []models.DeviceCommands
+	err := query.Order("created_at ASC").Order("id ASC").Limit(limit).Find(&commands).Error
+	if err != nil {
+		return nil, true, err
+	}
+
+	return commands, true, nil
 }
