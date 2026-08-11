@@ -49,9 +49,14 @@ func registerAuth(r *gin.RouterGroup, DB *gorm.DB) {
 }
 
 func registerDevices(r *gin.RouterGroup, DB *gorm.DB) {
-	handler := devices.NewHandler(DB)
+	deviceHandler := devices.NewHandler(DB)
+	commandHandler := devicecontrol.NewHandler(DB)
 
-	r.POST("/devices", middleware.JWTAuthMiddleware(), handler.AddDevice)
+	deviceGrp := r.Group("/devices", middleware.JWTAuthMiddleware())
+	{
+		deviceGrp.POST("", deviceHandler.AddDevice)
+		deviceGrp.POST("/:deviceId/commands", commandHandler.CreateCommand)
+	}
 }
 
 func registerFirmwareAuth(r *gin.RouterGroup, DB *gorm.DB) {
@@ -87,6 +92,7 @@ func registerFirmwareControl(r *gin.RouterGroup, DB *gorm.DB) {
 	{
 		deviceGrp.GET("/config", handler.GetConfig)
 		deviceGrp.GET("/commands", handler.ListCommands)
+		deviceGrp.POST("/commands/:commandId/track", handler.TrackCommand)
 	}
 }
 
