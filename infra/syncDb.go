@@ -18,6 +18,8 @@ func SyncDatabase() {
 		&models.Notifications{},
 		&models.IngestionBatches{},
 		&models.DeviceCommands{},
+		&models.FirmwareReleases{},
+		&models.FirmwareInstallations{},
 	)
 	if err != nil {
 		log.Fatalf("failed to auto-migrate database schema: %v", err)
