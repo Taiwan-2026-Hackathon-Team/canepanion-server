@@ -1,5 +1,6 @@
 @deviceId = 6fdce032-90da-4a27-938b-9b5c367121f4
-@deviceToken = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhdWQiOiJjYW5lcGFuaW9uLWZpcm13YXJlIiwiZGV2aWNlSWQiOiI2ZmRjZTAzMi05MGRhLTRhMjctOTM4Yi05YjVjMzY3MTIxZjQiLCJleHAiOjE3ODYwMDI2NDgsImlhdCI6MTc4NjAwMTc0OCwiaXNzIjoiY2FuZXBhbmlvbi1zZXJ2ZXIiLCJ0b2tlblR5cGUiOiJkZXZpY2UifQ.s4je3mXSvwqXy5uaK1xxYeeBl5RZnNalMSqs94o7_R4
+@commandId = 16af4740-8771-420b-a373-1a6ba4d2d2ec
+@deviceToken = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhdWQiOiJjYW5lcGFuaW9uLWZpcm13YXJlIiwiZGV2aWNlSWQiOiI2ZmRjZTAzMi05MGRhLTRhMjctOTM4Yi05YjVjMzY3MTIxZjQiLCJleHAiOjE3ODY0MTg4MzIsImlhdCI6MTc4NjQxNzkzMiwiaXNzIjoiY2FuZXBhbmlvbi1zZXJ2ZXIiLCJ0b2tlblR5cGUiOiJkZXZpY2UifQ.ES7RA0K1EITtXAoWD6vjJpNSCSHPvuWc2p68l4nrT2o
 
 ### Poll pending commands using the default page size
 GET http://localhost:8080/api/v1/firmware/devices/{{deviceId}}/commands
@@ -10,3 +11,17 @@ Authorization: Bearer {{deviceToken}}
 GET http://localhost:8080/api/v1/firmware/devices/{{deviceId}}/commands?limit=25&cursor=replace-with-next-cursor
 Accept: application/json
 Authorization: Bearer {{deviceToken}}
+
+### Report that a command was received
+POST http://localhost:8080/api/v1/firmware/devices/{{deviceId}}/commands/{{commandId}}/track
+Content-Type: application/json
+Authorization: Bearer {{deviceToken}}
+
+{"status": "RECEIVED"}
+
+### Report that a command completed (use FAILED to report failure)
+POST http://localhost:8080/api/v1/firmware/devices/{{deviceId}}/commands/{{commandId}}/track
+Content-Type: application/json
+Authorization: Bearer {{deviceToken}}
+
+{"status": "COMPLETED"}

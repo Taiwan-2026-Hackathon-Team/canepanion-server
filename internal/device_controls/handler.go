@@ -20,6 +20,28 @@ func NewHandler(db *gorm.DB) *Handler {
 	return &Handler{service: service}
 }
 
+func (h *Handler) CreateCommand(c *gin.Context) {
+	req, err := http_helper.BindJSON[CreateCommandRequest](c)
+	if err != nil {
+		_ = c.Error(err)
+		return
+	}
+
+	userID, err := http_helper.ExtractUserIDFromContext(c)
+	if err != nil {
+		_ = c.Error(err)
+		return
+	}
+
+	response, err := h.service.CreateCommand(userID, c.Param("deviceId"), req)
+	if err != nil {
+		_ = c.Error(err)
+		return
+	}
+
+	c.JSON(http.StatusCreated, response)
+}
+
 func (h *Handler) GetConfig(c *gin.Context) {
 	response, etag, err := h.service.GetDeviceConfig(c.Param("deviceId"))
 	if err != nil {
@@ -67,10 +89,16 @@ func (h *Handler) ListCommands(c *gin.Context) {
 	c.JSON(http.StatusOK, response)
 }
 
-func (h *Handler) AcknowledgeCommand(c *gin.Context) {
-	notImplemented(c, "acknowledge device command")
-}
-
-func notImplemented(c *gin.Context, operation string) {
-	c.JSON(http.StatusNotImplemented, gin.H{"message": operation + " is not implemented"})
+func (h *Handler) TrackCommand(c *gin.Context) {
+	req, err := http_helper.BindJSON[TrackCommandRequest](c)
+	if err != nil {
+		_ = c.Error(err)
+		return
+	}
+	response, err := h.service.TrackCommand(c.Param("deviceId"), c.Param("commandId"), req)
+	if err != nil {
+		_ = c.Error(err)
+		return
+	}
+	c.JSON(http.StatusOK, response)
 }

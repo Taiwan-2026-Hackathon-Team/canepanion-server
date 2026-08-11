@@ -38,6 +38,22 @@ func (r *Repository) FindConfigurationByDeviceID(deviceID uuid.UUID) (*DeviceCon
 	return &config, nil
 }
 
+func (r *Repository) FindDeviceByID(deviceID uuid.UUID) (*models.Devices, error) {
+	var device models.Devices
+	err := r.db.First(&device, "id = ?", deviceID).Error
+	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return &device, nil
+}
+
+func (r *Repository) CreateCommand(command *models.DeviceCommands) error {
+	return r.db.Create(command).Error
+}
+
 func (r *Repository) FindPendingCommands(
 	deviceID uuid.UUID,
 	cursor *commandCursor,
@@ -68,4 +84,27 @@ func (r *Repository) FindPendingCommands(
 	}
 
 	return commands, true, nil
+}
+
+func (r *Repository) FindCommandByID(deviceID, commandID uuid.UUID) (*models.DeviceCommands, error) {
+	var command models.DeviceCommands
+	err := r.db.Where("id = ? AND device_id = ?", commandID, deviceID).First(&command).Error
+	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, nil
+		}
+		return nil, err
+	}
+
+	return &command, nil
+}
+
+func (r *Repository) UpdateCommandStatus(
+	deviceID, commandID uuid.UUID,
+	currentStatus, nextStatus models.DeviceCommandStatus,
+) (bool, error) {
+	result := r.db.Model(&models.DeviceCommands{}).
+		Where("id = ? AND device_id = ? AND status = ?", commandID, deviceID, currentStatus).
+		Update("status", nextStatus)
+	return result.RowsAffected == 1, result.Error
 }

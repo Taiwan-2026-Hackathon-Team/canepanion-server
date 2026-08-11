@@ -1,13 +1,28 @@
-@authToken = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE3ODUzOTUxMDcsInJvbGUiOiJDQU5FX1VTRVIiLCJ1c2VySWQiOiIyYjMwZDJiNi01ZWYyLTRlZGEtYTc5YS0xOGUzMGVlMWM5MDkifQ.t2SoMkuYpDs7JxGHOeivXWGQqdZczBCKHfdyeecA_HI
+@deviceId = 6fdce032-90da-4a27-938b-9b5c367121f4
+
+@userToken = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE3ODY0MzU4NzQsInJvbGUiOiJDQU5FX1VTRVIiLCJ1c2VySWQiOiIyYjMwZDJiNi01ZWYyLTRlZGEtYTc5YS0xOGUzMGVlMWM5MDkifQ.ApOk_my-1-rvHvF0i3wbqG72fvvU7bgLkxGtXDSYYX0
 
 ### Create a device owned by the logged-in cane user
-
 POST http://localhost:8080/api/v1/devices
 Content-Type: application/json
 Accept: application/json
-Authorization: Bearer {{authToken}}
+Authorization: Bearer {{userToken}}
 
 {
   "name": "Cane Device",
   "guardianUserId": "c122ea2c-d86e-4c1a-b800-379e7b9cbe50"
+}
+
+### Create a device command 
+POST http://localhost:8080/api/v1/devices/{{deviceId}}/commands
+Content-Type: application/json
+Accept: application/json
+Authorization: Bearer {{userToken}}
+
+{
+  "type": "PLAY_MESSAGE",
+  "payload": {
+    "message": "Dinner is ready"
+  },
+  "expiresAt": "2030-08-11T14:00:00Z"
 }

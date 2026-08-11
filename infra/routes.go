@@ -33,7 +33,7 @@ func RegisterRoutes(r *gin.Engine, DB *gorm.DB, notifier push.Notifier, voiceJob
 	registerFirmwareTelemetry(firmware, DB, notifier)
 	registerFirmwareAudio(firmware, DB, voiceJob)
 	registerFirmwareControl(firmware, DB)
-	// registerFirmwareUpdates(firmware, DB)
+	registerFirmwareUpdates(firmware, DB)
 }
 
 func registerAuth(r *gin.RouterGroup, DB *gorm.DB) {
@@ -49,9 +49,14 @@ func registerAuth(r *gin.RouterGroup, DB *gorm.DB) {
 }
 
 func registerDevices(r *gin.RouterGroup, DB *gorm.DB) {
-	handler := devices.NewHandler(DB)
+	deviceHandler := devices.NewHandler(DB)
+	commandHandler := devicecontrol.NewHandler(DB)
 
-	r.POST("/devices", middleware.JWTAuthMiddleware(), handler.AddDevice)
+	deviceGrp := r.Group("/devices", middleware.JWTAuthMiddleware())
+	{
+		deviceGrp.POST("", deviceHandler.AddDevice)
+		deviceGrp.POST("/:deviceId/commands", commandHandler.CreateCommand)
+	}
 }
 
 func registerFirmwareAuth(r *gin.RouterGroup, DB *gorm.DB) {
@@ -87,15 +92,16 @@ func registerFirmwareControl(r *gin.RouterGroup, DB *gorm.DB) {
 	{
 		deviceGrp.GET("/config", handler.GetConfig)
 		deviceGrp.GET("/commands", handler.ListCommands)
+		deviceGrp.POST("/commands/:commandId/track", handler.TrackCommand)
 	}
 }
 
 func registerFirmwareUpdates(r *gin.RouterGroup, DB *gorm.DB) {
 	handler := firmwareupdates.NewHandler(DB)
 
-	firmwareGrp := r.Group("/devices/:deviceId/firmware")
+	firmwareGrp := r.Group("/devices/:deviceId/firmware", middleware.DeviceAuthMiddleware())
 	{
 		firmwareGrp.GET("/latest", handler.GetLatest)
-		firmwareGrp.POST("/report", handler.Report)
+		firmwareGrp.POST("/report", handler.ReportFirmwareUpdate)
 	}
 }

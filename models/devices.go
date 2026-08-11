@@ -15,6 +15,7 @@ type Devices struct {
 	Status               DeviceStatus    `gorm:"type:varchar(25);not null;default:ONLINE" json:"status"`
 	BatteryLevel         int32           `gorm:"type:integer" json:"batteryLevel"`
 	FirmwareVersion      *string         `gorm:"type:varchar(25)" json:"firmwareVersion"`
+	HardwareVersion      *string         `gorm:"type:varchar(50);index" json:"hardwareVersion"`
 	Configuration        json.RawMessage `gorm:"type:jsonb;not null;default:'{}'" json:"configuration"`
 	ConfigurationVersion uint64          `gorm:"not null;default:1" json:"configurationVersion"`
 	LastSeenAt           time.Time       `json:"lastSeenAt"`
