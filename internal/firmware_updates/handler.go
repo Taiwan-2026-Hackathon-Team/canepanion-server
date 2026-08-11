@@ -3,6 +3,8 @@ package firmwareupdates
 import (
 	"net/http"
 
+	http_helper "canepanion-server/pkg/http"
+
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )
@@ -18,13 +20,27 @@ func NewHandler(db *gorm.DB) *Handler {
 }
 
 func (h *Handler) GetLatest(c *gin.Context) {
-	notImplemented(c, "get latest firmware")
+	response, err := h.service.GetLatest(c.Param("deviceId"))
+	if err != nil {
+		_ = c.Error(err)
+		return
+	}
+
+	c.JSON(http.StatusOK, response)
 }
 
-func (h *Handler) Report(c *gin.Context) {
-	notImplemented(c, "report firmware installation")
-}
+func (h *Handler) ReportFirmwareUpdate(c *gin.Context) {
+	req, err := http_helper.BindJSON[ReportRequest](c)
+	if err != nil {
+		_ = c.Error(err)
+		return
+	}
 
-func notImplemented(c *gin.Context, operation string) {
-	c.JSON(http.StatusNotImplemented, gin.H{"message": operation + " is not implemented"})
+	response, err := h.service.ReportFirmwareUpdate(c.Param("deviceId"), req)
+	if err != nil {
+		_ = c.Error(err)
+		return
+	}
+
+	c.JSON(http.StatusOK, response)
 }
