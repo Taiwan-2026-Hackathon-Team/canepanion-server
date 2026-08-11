@@ -33,7 +33,7 @@ func RegisterRoutes(r *gin.Engine, DB *gorm.DB, notifier push.Notifier, voiceJob
 	registerFirmwareTelemetry(firmware, DB, notifier)
 	registerFirmwareAudio(firmware, DB, voiceJob)
 	registerFirmwareControl(firmware, DB)
-	// registerFirmwareUpdates(firmware, DB)
+	registerFirmwareUpdates(firmware, DB)
 }
 
 func registerAuth(r *gin.RouterGroup, DB *gorm.DB) {
@@ -99,9 +99,9 @@ func registerFirmwareControl(r *gin.RouterGroup, DB *gorm.DB) {
 func registerFirmwareUpdates(r *gin.RouterGroup, DB *gorm.DB) {
 	handler := firmwareupdates.NewHandler(DB)
 
-	firmwareGrp := r.Group("/devices/:deviceId/firmware")
+	firmwareGrp := r.Group("/devices/:deviceId/firmware", middleware.DeviceAuthMiddleware())
 	{
 		firmwareGrp.GET("/latest", handler.GetLatest)
-		firmwareGrp.POST("/report", handler.Report)
+		firmwareGrp.POST("/report", handler.ReportFirmwareUpdate)
 	}
 }
