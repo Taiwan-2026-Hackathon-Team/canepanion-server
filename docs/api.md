@@ -288,11 +288,89 @@ Suggested command types include:
 
 | Method | Endpoint | Authentication | Purpose | Related model |
 | --- | --- | --- | --- | --- |
-| `GET` | `/api/v1/firmware/devices/{deviceId}/firmware/latest` | Device token | Check for a firmware release compatible with the device hardware. | New `firmware_releases` model |
-| `POST` | `/api/v1/firmware/devices/{deviceId}/firmware/report` | Device token | Report download, verification, installation, rollback, or failure status. | New `firmware_installations` model |
+| `GET` | `/api/v1/firmware/devices/{deviceId}/firmware/latest` | Device token | Get the latest published release compatible with the device hardware. | `firmware_releases` |
+| `POST` | `/api/v1/firmware/devices/{deviceId}/firmware/report` | Device token | Report download, verification, installation, rollback, or failure. | `firmware_installations`, and `devices` for `INSTALLED` |
 
-Firmware release responses should provide the version, file size, download URL,
-SHA-256 digest, cryptographic signature, and whether the update is mandatory.
+### Get the latest compatible firmware
+
+`GET /api/v1/firmware/devices/{deviceId}/firmware/latest`
+
+The device token must match the path `deviceId`. The server reads
+`devices.hardware_version`, selects releases with an exact hardware-version
+match and `published_at` not later than server time, and returns the most
+recently published release.
+
+```json
+{
+  "releaseId": "9e6047f1-03ea-486b-9278-27a69e970ca1",
+  "version": "1.4.2",
+  "hardwareVersion": "HW-1",
+  "downloadUrl": "https://example.com/firmware/HW-1/1.4.2.bin",
+  "fileSizeBytes": 8388608,
+  "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "signature": "base64-or-armored-signature",
+  "mandatory": false,
+  "publishedAt": "2026-08-11T08:00:00Z"
+}
+```
+
+The endpoint returns `400` when hardware version is not configured, `404` when
+the device or compatible release does not exist, `401` for an invalid device
+token, and `403` when the token belongs to another device.
+
+### Report firmware update progress
+
+`POST /api/v1/firmware/devices/{deviceId}/firmware/report`
+
+Each lifecycle event uses a unique `messageId`. `reportedAt` is the device event
+time and cannot be more than five minutes in the future relative to server
+time.
+
+```json
+{
+  "messageId": "01K2FA4Q6G8M3V7R2Y51N9P0KD",
+  "releaseId": "9e6047f1-03ea-486b-9278-27a69e970ca1",
+  "status": "INSTALLED",
+  "reportedAt": "2026-08-11T08:32:10Z"
+}
+```
+
+Supported statuses are `DOWNLOADING`, `DOWNLOADED`, `VERIFYING`, `VERIFIED`,
+`INSTALLING`, `INSTALLED`, `ROLLED_BACK`, and `FAILED`. A `FAILED` report must
+include `error`; `error` is rejected for every other status:
+
+```json
+{
+  "messageId": "01K2FA4Q6G8M3V7R2Y51N9P0KE",
+  "releaseId": "9e6047f1-03ea-486b-9278-27a69e970ca1",
+  "status": "FAILED",
+  "reportedAt": "2026-08-11T08:32:10Z",
+  "error": {
+    "code": "SIGNATURE_INVALID",
+    "message": "Firmware signature verification failed"
+  }
+}
+```
+
+The release must exist and its hardware version must match the device. A
+successful report returns `200 OK`:
+
+```json
+{
+  "installationId": "62cacbc3-9bb8-4ed5-8993-a6cb811f76d5",
+  "messageId": "01K2FA4Q6G8M3V7R2Y51N9P0KD",
+  "releaseId": "9e6047f1-03ea-486b-9278-27a69e970ca1",
+  "status": "INSTALLED",
+  "reportedAt": "2026-08-11T08:32:10Z",
+  "duplicate": false,
+  "serverTime": "2026-08-11T08:32:11Z"
+}
+```
+
+Reports are idempotent by `(deviceId, messageId)`. A retry returns the original
+event with `duplicate: true`, even if retry fields differ. A new `INSTALLED`
+report updates `devices.firmware_version` to the release version in the same
+database transaction.
 
 ## Recommended implementation order
 
