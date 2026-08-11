@@ -1,0 +1,69 @@
+@deviceId = 6fdce032-90da-4a27-938b-9b5c367121f4
+@releaseId = 9e6047f1-03ea-486b-9278-27a69e970ca1
+@deviceToken = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhdWQiOiJjYW5lcGFuaW9uLWZpcm13YXJlIiwiZGV2aWNlSWQiOiI2ZmRjZTAzMi05MGRhLTRhMjctOTM4Yi05YjVjMzY3MTIxZjQiLCJleHAiOjE3ODY0MjcwMDAsImlhdCI6MTc4NjQyNjEwMCwiaXNzIjoiY2FuZXBhbmlvbi1zZXJ2ZXIiLCJ0b2tlblR5cGUiOiJkZXZpY2UifQ.k76bg7cq-Ip_FLMJf8QSvHUbGGkMmVDFB7Xv8t_Tnv8
+@idempotentMessageId = firmware-install-idempotency-test-001
+
+### Get the latest firmware release compatible with this device
+GET http://localhost:8080/api/v1/firmware/devices/{{deviceId}}/firmware/latest
+Accept: application/json
+Authorization: Bearer {{deviceToken}}
+
+### Report that firmware installation completed
+POST http://localhost:8080/api/v1/firmware/devices/{{deviceId}}/firmware/report
+Content-Type: application/json
+Accept: application/json
+Authorization: Bearer {{deviceToken}}
+
+{
+  "messageId": "{{idempotentMessageId}}",
+  "releaseId": "{{releaseId}}",
+  "status": "INSTALLED",
+  "reportedAt": "{{$datetime iso8601}}"
+}
+
+### Retry the same installation report; response duplicate should be true
+POST http://localhost:8080/api/v1/firmware/devices/{{deviceId}}/firmware/report
+Content-Type: application/json
+Accept: application/json
+Authorization: Bearer {{deviceToken}}
+
+{
+  "messageId": "{{idempotentMessageId}}",
+  "releaseId": "{{releaseId}}",
+  "status": "INSTALLED",
+  "reportedAt": "{{$datetime iso8601}}"
+}
+
+### Report a failed firmware update
+POST http://localhost:8080/api/v1/firmware/devices/{{deviceId}}/firmware/report
+Content-Type: application/json
+Accept: application/json
+Authorization: Bearer {{deviceToken}}
+
+{
+  "messageId": "firmware-failed-{{$guid}}",
+  "releaseId": "{{releaseId}}",
+  "status": "FAILED",
+  "reportedAt": "{{$datetime iso8601}}",
+  "error": {
+    "code": "SIGNATURE_INVALID",
+    "message": "Firmware signature verification failed"
+  }
+}
+
+### Validation: FAILED requires an error code and message
+POST http://localhost:8080/api/v1/firmware/devices/{{deviceId}}/firmware/report
+Content-Type: application/json
+Accept: application/json
+Authorization: Bearer {{deviceToken}}
+
+{
+  "messageId": "firmware-invalid-failed-{{$guid}}",
+  "releaseId": "{{releaseId}}",
+  "status": "FAILED",
+  "reportedAt": "{{$datetime iso8601}}"
+}
+
+### Authorization: reject latest check without a device token
+GET http://localhost:8080/api/v1/firmware/devices/{{deviceId}}/firmware/latest
+Accept: application/json
