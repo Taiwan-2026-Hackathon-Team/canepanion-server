@@ -39,5 +39,12 @@ type ListCommandsResponse struct {
 	NextCursor string                  `json:"nextCursor,omitempty"`
 }
 
-type AcknowledgeCommandRequest struct{}
-type AcknowledgeCommandResponse struct{}
+type TrackCommandRequest struct {
+	Status models.DeviceCommandStatus `json:"status" binding:"required"`
+}
+
+type TrackCommandResponse struct {
+	CommandID uuid.UUID                  `json:"commandId"`
+	Status    models.DeviceCommandStatus `json:"status"`
+	UpdatedAt time.Time                  `json:"updatedAt"`
+}
