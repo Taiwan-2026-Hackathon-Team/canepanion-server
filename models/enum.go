@@ -36,6 +36,19 @@ const (
 	DeviceCommandStatusFailed    DeviceCommandStatus = "FAILED"
 )
 
+type FirmwareInstallationStatus string
+
+const (
+	FirmwareInstallationStatusDownloading FirmwareInstallationStatus = "DOWNLOADING"
+	FirmwareInstallationStatusDownloaded  FirmwareInstallationStatus = "DOWNLOADED"
+	FirmwareInstallationStatusVerifying   FirmwareInstallationStatus = "VERIFYING"
+	FirmwareInstallationStatusVerified    FirmwareInstallationStatus = "VERIFIED"
+	FirmwareInstallationStatusInstalling  FirmwareInstallationStatus = "INSTALLING"
+	FirmwareInstallationStatusInstalled   FirmwareInstallationStatus = "INSTALLED"
+	FirmwareInstallationStatusRolledBack  FirmwareInstallationStatus = "ROLLED_BACK"
+	FirmwareInstallationStatusFailed      FirmwareInstallationStatus = "FAILED"
+)
+
 type AudioDirection string
 
 const (
