@@ -24,6 +24,10 @@ func NewUnauthorized(msg string, err error) *AppError {
 	return &AppError{Code: 401, Message: msg, Err: err}
 }
 
+func NewForbidden(msg string, err error) *AppError {
+	return &AppError{Code: 403, Message: msg, Err: err}
+}
+
 func NewInternal(msg string, err error) *AppError {
 	return &AppError{Code: 500, Message: msg, Err: err}
 }
