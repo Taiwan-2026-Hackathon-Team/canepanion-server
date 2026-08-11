@@ -273,7 +273,7 @@ These endpoints allow the cloud to configure devices and send actions to them.
 | --- | --- | --- | --- | --- |
 | `GET` | `/api/v1/firmware/devices/{deviceId}/config` | Device token | Download the current cloud-managed device configuration. Supports `ETag` and `If-None-Match`. | New `device_configurations` model |
 | `GET` | `/api/v1/firmware/devices/{deviceId}/commands` | Device token | Poll for pending commands, optionally using a cursor. | New `device_commands` model |
-| `POST` | `/api/v1/firmware/devices/{deviceId}/commands/{commandId}/ack` | Device token | Report that a command was received, completed, or failed. | New `device_commands` model |
+| `POST` | `/api/v1/firmware/devices/{deviceId}/commands/{commandId}/track` | Device token | Report that a command was received, completed, or failed. | New `device_commands` model |
 
 Suggested command types include:
 
@@ -294,7 +294,7 @@ Suggested command types include:
 Firmware release responses should provide the version, file size, download URL,
 SHA-256 digest, cryptographic signature, and whether the update is mandatory.
 
-## Recommended implementation orde
+## Recommended implementation order
 
 | Order | Capability | Reason |
 | --- | --- | --- |
@@ -306,7 +306,7 @@ SHA-256 digest, cryptographic signature, and whether the update is mandatory.
 | 6 | Commands and acknowledgements | Enables reliable cloud-to-device actions. |
 | 7 | Firmware updates | Adds controlled remote software delivery after the core protocol is stable. |
 
-## Required API behavio
+## Required API behavior
 
 | Requirement | Recommendation |
 | --- | --- |
