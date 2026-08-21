@@ -26,8 +26,6 @@ type Devices struct {
 	Guardian Users `gorm:"foreignKey:GuardianUserID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE" json:"-"`
 }
 
-// IsOwnerOrGuardian is the single source of truth for the owner-or-guardian
-// authorization rule shared by device commands and camera access.
 func (d Devices) IsOwnerOrGuardian(userID uuid.UUID) bool {
 	return userID == d.OwnerUserID || userID == d.GuardianUserID
 }

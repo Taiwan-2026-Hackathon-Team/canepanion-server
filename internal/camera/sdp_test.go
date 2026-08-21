@@ -6,10 +6,6 @@ import (
 	"testing"
 )
 
-// baseOfferLines is a minimal, standards-shaped non-trickle offer: one H264
-// constrained-baseline video section with rtcp-mux, inline ICE, and a DTLS
-// fingerprint. Tests copy and mutate this slice to break one invariant at a
-// time.
 func baseOfferLines(direction string) []string {
 	return []string{
 		"v=0",

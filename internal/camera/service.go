@@ -11,9 +11,6 @@ import (
 	"github.com/google/uuid"
 )
 
-// deviceLookup is implemented by the existing internal/device_controls
-// Repository, so camera authorization reuses the one device query the rest
-// of the server already has.
 type deviceLookup interface {
 	FindDeviceByID(deviceID uuid.UUID) (*models.Devices, error)
 }
@@ -27,16 +24,12 @@ func NewService(devices deviceLookup, hub *Hub) *Service {
 	return &Service{devices: devices, hub: hub}
 }
 
-// CameraStatusResponse is the GET /camera body. State mirrors the session
-// state machine the hub owns: OFFLINE, WAITING, or LIVE.
+// CameraStatusResponse is the GET /camera JSON body.
 type CameraStatusResponse struct {
 	State       sessionState `json:"state"`
 	ViewerCount int          `json:"viewerCount"`
 }
 
-// Publish accepts a firmware WHIP offer. DeviceAuthMiddleware has already
-// bound the bearer claim to deviceIDValue, so no additional device lookup
-// happens here.
 func (s *Service) Publish(ctx context.Context, deviceIDValue string, offer publisherOffer) (publication, error) {
 	deviceID, err := utils.ParseId(deviceIDValue)
 	if err != nil {
@@ -50,8 +43,6 @@ func (s *Service) Publish(ctx context.Context, deviceIDValue string, offer publi
 	return pub, nil
 }
 
-// View accepts a guardian-app WHEP offer once the caller is confirmed as the
-// device's owner or guardian.
 func (s *Service) View(ctx context.Context, userIDValue, deviceIDValue string, offer viewerOffer) (viewerHandle, error) {
 	userID, deviceID, err := s.authorize(userIDValue, deviceIDValue)
 	if err != nil {
@@ -65,9 +56,6 @@ func (s *Service) View(ctx context.Context, userIDValue, deviceIDValue string, o
 	return handle, nil
 }
 
-// StopPublication tears down a publication. It performs no ownership check
-// beyond DeviceAuthMiddleware's path binding, matching the idempotent DELETE
-// contract: a stale or missing publicationID still succeeds.
 func (s *Service) StopPublication(ctx context.Context, deviceIDValue, publicationIDValue string) error {
 	deviceID, err := utils.ParseId(deviceIDValue)
 	if err != nil {
@@ -84,9 +72,6 @@ func (s *Service) StopPublication(ctx context.Context, deviceIDValue, publicatio
 	return nil
 }
 
-// StopViewer tears down a viewer once the caller is confirmed as the
-// device's owner or guardian. The hub additionally requires the viewer to
-// have been created by this same principal.
 func (s *Service) StopViewer(ctx context.Context, userIDValue, deviceIDValue, viewerIDValue string) error {
 	userID, deviceID, err := s.authorize(userIDValue, deviceIDValue)
 	if err != nil {
@@ -103,8 +88,6 @@ func (s *Service) StopViewer(ctx context.Context, userIDValue, deviceIDValue, vi
 	return nil
 }
 
-// Status answers GET /camera once the caller is confirmed as the device's
-// owner or guardian.
 func (s *Service) Status(userIDValue, deviceIDValue string) (*CameraStatusResponse, error) {
 	_, deviceID, err := s.authorize(userIDValue, deviceIDValue)
 	if err != nil {
@@ -115,8 +98,6 @@ func (s *Service) Status(userIDValue, deviceIDValue string) (*CameraStatusRespon
 	return &CameraStatusResponse{State: status.state, ViewerCount: status.viewerCount}, nil
 }
 
-// authorize is the one place View, StopViewer, and Status parse identities
-// and enforce IsOwnerOrGuardian, so the rule cannot drift between them.
 func (s *Service) authorize(userIDValue, deviceIDValue string) (uuid.UUID, uuid.UUID, error) {
 	userID, err := utils.ParseId(userIDValue)
 	if err != nil {

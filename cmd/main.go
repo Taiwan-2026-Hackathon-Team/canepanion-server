@@ -34,8 +34,6 @@ func main() {
 		log.Fatalf("Failed to initialize voice pipeline: %v", err)
 	}
 
-	// Camera relay. Process-wide like VoiceJob: one Pion configuration and
-	// one session lookup shared by every device.
 	cameraHub, err := camera.NewHubFromEnv()
 	if err != nil {
 		log.Fatalf("Failed to initialize camera relay: %v", err)

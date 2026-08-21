@@ -8,17 +8,8 @@ import (
 	"github.com/pion/webrtc/v4"
 )
 
-// h264Relay is the one stable local track a device session offers to every
-// viewer. Viewers bind to it before a publisher exists; a publisher
-// replacement changes the relay's active generation, not the viewer tracks,
-// so nobody renegotiates when the cane reconnects.
 type h264Relay struct {
-	track *webrtc.TrackLocalStaticRTP
-
-	// fastGeneration lets a stale publisher's write bail out without taking
-	// mu. mu remains the authority: every write re-checks under lock, so the
-	// two checks can never both pass for a generation activate() already
-	// superseded.
+	track          *webrtc.TrackLocalStaticRTP
 	fastGeneration atomic.Uint64
 
 	mu                  sync.Mutex
@@ -31,9 +22,6 @@ type h264Relay struct {
 	lastOutputTimestamp uint32
 }
 
-// relayLease is the capability a publisher peer writes through. It carries
-// the generation it was issued for, so a replaced publisher's in-flight RTP
-// is silently dropped instead of corrupting the live stream.
 type relayLease struct {
 	relay      *h264Relay
 	generation uint64
@@ -51,7 +39,6 @@ func newH264Relay(streamID string) (*h264Relay, error) {
 	return &h264Relay{track: track}, nil
 }
 
-// activate starts a fresh generation for a newly negotiated publisher.
 func (r *h264Relay) activate() relayLease {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -62,11 +49,7 @@ func (r *h264Relay) activate() relayLease {
 	return relayLease{relay: r, generation: r.generation}
 }
 
-// write rewrites sequence numbers and timestamps so a replacement publisher
-// does not look like a new RTP source to already-connected viewers, strips
-// header extensions and padding that were never negotiated with viewers, and
-// forwards through the shared local track. Pion applies each viewer
-// binding's own negotiated SSRC and payload type during that write.
+// Pion rewrites SSRC and payload type per viewer binding in writeRTP.
 func (l relayLease) write(packet *rtp.Packet) error {
 	r := l.relay
 	if r.fastGeneration.Load() != l.generation {

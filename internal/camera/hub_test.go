@@ -13,10 +13,6 @@ import (
 	"github.com/pion/webrtc/v4/pkg/media"
 )
 
-// newTestHub builds a Hub whose ICE configuration only ever produces host
-// candidates. STUN would try to leave the sandbox network, so tests reach
-// past NewHubFromEnv's field values directly instead of routing through
-// environment variables that cannot express "no servers at all".
 func newTestHub(t *testing.T) *Hub {
 	t.Helper()
 	hub, err := NewHubFromEnv()
@@ -29,9 +25,6 @@ func newTestHub(t *testing.T) *Hub {
 	return hub
 }
 
-// newClientTestAPI mirrors the Hub's own MediaEngine so a test-side Pion
-// peer negotiates the same constrained-baseline H264 profile sdp.go
-// requires.
 func newClientTestAPI(t *testing.T) *webrtc.API {
 	t.Helper()
 	mediaEngine := &webrtc.MediaEngine{}
@@ -54,9 +47,6 @@ func newClientTestAPI(t *testing.T) *webrtc.API {
 	return webrtc.NewAPI(webrtc.WithMediaEngine(mediaEngine), webrtc.WithInterceptorRegistry(interceptorRegistry))
 }
 
-// createOfferSDP negotiates locally exactly the way a non-trickle WHIP/WHEP
-// client must: gather before returning, so the SDP carries inline
-// candidates for sdp.go's requireNonTrickleTransport.
 func createOfferSDP(t *testing.T, pc *webrtc.PeerConnection) string {
 	t.Helper()
 	gatherComplete := webrtc.GatheringCompletePromise(pc)
@@ -77,8 +67,6 @@ func createOfferSDP(t *testing.T, pc *webrtc.PeerConnection) string {
 	return pc.LocalDescription().SDP
 }
 
-// newPublisherClient builds a test-side WHIP client: one sendonly H264
-// track a fake cane can write samples to.
 func newPublisherClient(t *testing.T) (*webrtc.PeerConnection, *webrtc.TrackLocalStaticSample, string) {
 	t.Helper()
 	pc, err := newClientTestAPI(t).NewPeerConnection(webrtc.Configuration{})
@@ -100,9 +88,6 @@ func newPublisherClient(t *testing.T) (*webrtc.PeerConnection, *webrtc.TrackLoca
 	return pc, track, createOfferSDP(t, pc)
 }
 
-// newViewerClient builds a test-side WHEP client. Its OnTrack handler is
-// wired before any negotiation starts, so a track that arrives the instant
-// DTLS completes can never race past a listener that is not attached yet.
 func newViewerClient(t *testing.T) (pc *webrtc.PeerConnection, offerSDP string, rtpReceived <-chan struct{}) {
 	t.Helper()
 	pc, err := newClientTestAPI(t).NewPeerConnection(webrtc.Configuration{})
@@ -149,9 +134,6 @@ func waitConnected(t *testing.T, pc *webrtc.PeerConnection, timeout time.Duratio
 	t.Fatalf("peer connection did not reach connected state within %s (last state=%s)", timeout, pc.ConnectionState())
 }
 
-// startWritingSamples feeds fake NAL bytes at a steady rate. Nothing in the
-// relay path decodes H264, so the payload only needs to move real RTP
-// packets through the pipe.
 func startWritingSamples(t *testing.T, track *webrtc.TrackLocalStaticSample, stop <-chan struct{}) {
 	t.Helper()
 	go func() {
@@ -231,9 +213,6 @@ func TestHub_PublishThenView_RelaysMedia(t *testing.T) {
 	}
 }
 
-// TestHub_ReplacePublisher_SwapsCurrentPublication exercises the actor's
-// replace path: the second publish supersedes the first without a viewer
-// renegotiation, and only the current publication ID can end the session.
 func TestHub_ReplacePublisher_SwapsCurrentPublication(t *testing.T) {
 	hub := newTestHub(t)
 	ctx := context.Background()

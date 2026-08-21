@@ -28,9 +28,6 @@ func RegisterRoutes(r *gin.Engine, DB *gorm.DB, notifier push.Notifier, voiceJob
 	registerAuth(v1, DB)
 	registerDevices(v1, DB)
 
-	// cameraHandler is shared by the app-side WHEP routes below and the
-	// firmware-side WHIP routes further down; both sit on the one
-	// process-wide Hub.
 	cameraHandler := camera.NewHandler(camera.NewService(devicecontrol.NewRepository(DB), cameraHub))
 	registerCamera(v1, cameraHandler)
 
@@ -114,7 +111,6 @@ func registerFirmwareUpdates(r *gin.RouterGroup, DB *gorm.DB) {
 	}
 }
 
-// registerCamera wires the guardian-app WHEP endpoints.
 func registerCamera(r *gin.RouterGroup, handler *camera.Handler) {
 	deviceGrp := r.Group("/devices/:deviceId/camera", middleware.JWTAuthMiddleware())
 	{
@@ -125,7 +121,6 @@ func registerCamera(r *gin.RouterGroup, handler *camera.Handler) {
 	}
 }
 
-// registerFirmwareCamera wires the cane's WHIP publication endpoints.
 func registerFirmwareCamera(r *gin.RouterGroup, handler *camera.Handler) {
 	deviceGrp := r.Group("/devices/:deviceId/camera", middleware.DeviceAuthMiddleware())
 	{

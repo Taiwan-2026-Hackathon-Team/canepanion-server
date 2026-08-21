@@ -14,14 +14,8 @@ import (
 	"github.com/pion/webrtc/v4"
 )
 
-// disconnectedGrace is how long a peer may sit in the ICE "disconnected"
-// state before it is treated as ended. A short network blip should not tear
-// down the session.
 const disconnectedGrace = 15 * time.Second
 
-// pliCoalesceWindow rate-limits keyframe requests forwarded to the
-// publisher. Several viewers reporting loss around the same time collapse
-// into one PLI instead of a storm.
 const pliCoalesceWindow = 500 * time.Millisecond
 
 type peerKind int
@@ -31,20 +25,26 @@ const (
 	peerKindViewer
 )
 
+type remoteTrackOnce struct {
+	track atomic.Pointer[webrtc.TrackRemote]
+	ready chan struct{}
+	once  sync.Once
+}
+
+func newRemoteTrackOnce() remoteTrackOnce {
+	return remoteTrackOnce{ready: make(chan struct{})}
+}
+
+func (r *remoteTrackOnce) set(track *webrtc.TrackRemote) {
+	r.track.Store(track)
+	r.once.Do(func() { close(r.ready) })
+}
+
 type publisherPeer struct {
-	id    uuid.UUID
-	pc    *webrtc.PeerConnection
-	lease relayLease
-
-	// remoteTrack is published through trackReady (closed exactly once) so
-	// both the RTP-forwarding goroutine and requestKeyframeCmd's SSRC lookup
-	// observe it safely without racing each other for a single value.
-	remoteTrack  atomic.Pointer[webrtc.TrackRemote]
-	trackReady   chan struct{}
-	trackReadyOK sync.Once
-
-	// closed is signaled when the connection ends, so a publisher that
-	// never sends media does not leak the goroutine waiting on trackReady.
+	id     uuid.UUID
+	pc     *webrtc.PeerConnection
+	lease  relayLease
+	remote remoteTrackOnce
 	closed chan struct{}
 }
 
@@ -55,10 +55,6 @@ type viewerPeer struct {
 	sender    *webrtc.RTPSender
 }
 
-// negotiatePublisher creates the WHIP peer connection, applies the offer,
-// and answers after local ICE gathering completes. It does not touch any
-// session or relay; the caller wires the remote track to a relay lease once
-// it knows which device session owns this publisher.
 func (h *Hub) negotiatePublisher(ctx context.Context, offer publisherOffer) (*publisherPeer, localAnswer, error) {
 	pc, err := h.api.NewPeerConnection(webrtc.Configuration{ICEServers: h.iceServers})
 	if err != nil {
@@ -66,16 +62,15 @@ func (h *Hub) negotiatePublisher(ctx context.Context, offer publisherOffer) (*pu
 	}
 
 	peer := &publisherPeer{
-		id:         utils.GenerateUUID(),
-		pc:         pc,
-		trackReady: make(chan struct{}),
-		closed:     make(chan struct{}),
+		id:     utils.GenerateUUID(),
+		pc:     pc,
+		remote: newRemoteTrackOnce(),
+		closed: make(chan struct{}),
 	}
 
 	pc.OnTrack(func(track *webrtc.TrackRemote, receiver *webrtc.RTPReceiver) {
 		go drainReceiverRTCP(receiver)
-		peer.remoteTrack.Store(track)
-		peer.trackReadyOK.Do(func() { close(peer.trackReady) })
+		peer.remote.set(track)
 	})
 
 	answer, err := negotiateNonTrickle(ctx, pc, offer.rawSDP, h.negotiationTimeout)
@@ -86,10 +81,8 @@ func (h *Hub) negotiatePublisher(ctx context.Context, offer publisherOffer) (*pu
 	return peer, answer, nil
 }
 
-// negotiateViewer creates the WHEP peer connection bound to the session's
-// stable relay track, then applies the offer and answers after local ICE
-// gathering completes. The relay track is attached before SetRemoteDescription
-// so Pion matches it to the offer's recvonly video section.
+// AddTrack must run before SetRemoteDescription: pion matches the offer's
+// recvonly section against GetTransceivers() at that call, not later.
 func (h *Hub) negotiateViewer(
 	ctx context.Context,
 	principal uuid.UUID,
@@ -144,10 +137,6 @@ func negotiateNonTrickle(ctx context.Context, pc *webrtc.PeerConnection, offerSD
 	return localAnswer{sdp: pc.LocalDescription().SDP}, nil
 }
 
-// watchConnectionState posts a resource-ID-qualified peerEndedCmd when the
-// peer fails or closes outright, or when it stays disconnected past the
-// grace period. Stale callbacks from a replaced peer carry the old ID, so
-// the session actor's compare-before-remove keeps them harmless.
 func watchConnectionState(session *deviceSession, kind peerKind, id uuid.UUID, pc *webrtc.PeerConnection, closed chan struct{}) {
 	var mu sync.Mutex
 	var disconnectedTimer *time.Timer
@@ -208,9 +197,7 @@ func drainReceiverRTCP(receiver *webrtc.RTPReceiver) {
 	}
 }
 
-// drainSenderRTCP pumps a viewer's RTPSender so Pion's interceptors process
-// retransmission feedback, and coalesces any PLI/FIR into a keyframe request
-// forwarded to the device's current publisher.
+// ReadRTCP is the only path that drains Pion's interceptor chain (NACK and friends).
 func drainSenderRTCP(sender *webrtc.RTPSender, session *deviceSession) {
 	for {
 		packets, _, err := sender.ReadRTCP()

@@ -7,11 +7,6 @@ import (
 	"github.com/pion/rtcp"
 )
 
-// deviceSession is one device's publisher and viewer lifecycle actor. Only
-// its run goroutine reads or writes the publisher pointer and viewer map,
-// so replacement and removal never race per separate-before-serializing
-// shared state: every caller reaches this state through a channel, not a
-// shared lock.
 type deviceSession struct {
 	id       uuid.UUID
 	relay    *h264Relay
@@ -75,9 +70,6 @@ func newDeviceSession(id uuid.UUID, relay *h264Relay, onIdle func(*deviceSession
 	return s
 }
 
-// submit hands a command to the actor. If the actor already exited, the
-// caller gets errSessionClosed and is expected to look up (or create) a
-// fresh session rather than block forever on a receiver that is gone.
 func (s *deviceSession) submit(cmd sessionCommand) error {
 	select {
 	case s.commands <- cmd:
@@ -109,7 +101,7 @@ func (s *deviceSession) run(onIdle func(*deviceSession)) { //nolint:gocognit
 			var removed *publisherPeer
 			if publisher != nil && publisher.id == c.id {
 				removed = publisher
-				publisher = nil
+				publisher = removePublisherIfCurrent(publisher, c.id)
 			}
 			c.reply <- removed
 
@@ -137,9 +129,7 @@ func (s *deviceSession) run(onIdle func(*deviceSession)) { //nolint:gocognit
 		case peerEndedCmd:
 			switch c.kind {
 			case peerKindPublisher:
-				if publisher != nil && publisher.id == c.id {
-					publisher = nil
-				}
+				publisher = removePublisherIfCurrent(publisher, c.id)
 			case peerKindViewer:
 				delete(viewers, c.id)
 			}
@@ -175,8 +165,15 @@ func (s *deviceSession) run(onIdle func(*deviceSession)) { //nolint:gocognit
 	}
 }
 
+func removePublisherIfCurrent(publisher *publisherPeer, id uuid.UUID) *publisherPeer {
+	if publisher != nil && publisher.id == id {
+		return nil
+	}
+	return publisher
+}
+
 func publisherSSRC(p *publisherPeer) (uint32, bool) {
-	track := p.remoteTrack.Load()
+	track := p.remote.track.Load()
 	if track == nil {
 		return 0, false
 	}

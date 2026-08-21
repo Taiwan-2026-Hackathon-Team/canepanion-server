@@ -8,12 +8,8 @@ import (
 	"github.com/pion/sdp/v3"
 )
 
-// maxSDPBytes bounds the WHIP/WHEP offer body. It is enforced here, not by
-// the handler, because decode is the only place that reads the body.
 const maxSDPBytes = 64 << 10
 
-// decodePublisherOffer validates a firmware WHIP offer: exactly one active
-// sendonly H264 video section with a complete non-trickle transport.
 func decodePublisherOffer(r io.Reader) (publisherOffer, error) {
 	rawSDP, profile, err := decodeOffer(r, sdp.DirectionSendOnly)
 	if err != nil {
@@ -22,8 +18,6 @@ func decodePublisherOffer(r io.Reader) (publisherOffer, error) {
 	return publisherOffer{rawSDP: rawSDP, codec: profile}, nil
 }
 
-// decodeViewerOffer validates a guardian-app WHEP offer: exactly one active
-// recvonly H264 video section with a complete non-trickle transport.
 func decodeViewerOffer(r io.Reader) (viewerOffer, error) {
 	rawSDP, profile, err := decodeOffer(r, sdp.DirectionRecvOnly)
 	if err != nil {
@@ -74,9 +68,6 @@ func readCapped(r io.Reader) ([]byte, error) {
 	return data, nil
 }
 
-// singleActiveVideoSection requires exactly one non-rejected media section,
-// that it is video, and that its direction matches want. Audio, data
-// channels, and any extra active section are rejected here.
 func singleActiveVideoSection(parsed *sdp.SessionDescription, want sdp.Direction) (*sdp.MediaDescription, error) {
 	var video *sdp.MediaDescription
 	for _, m := range parsed.MediaDescriptions {
@@ -123,9 +114,6 @@ func mediaDirection(m *sdp.MediaDescription) sdp.Direction {
 	return sdp.Direction(0)
 }
 
-// negotiatedH264Profile finds the H264/90000 rtpmap and its fmtp line, then
-// requires packetization-mode=1 and a constrained baseline profile-level-id
-// (42e0xx). This is the only codec the hub's MediaEngine registers.
 func negotiatedH264Profile(m *sdp.MediaDescription) (h264Profile, error) {
 	payloadType := ""
 	for _, a := range m.Attributes {
@@ -195,9 +183,6 @@ func isConstrainedBaseline(profileLevelID string) bool {
 	return len(profileLevelID) == 6 && strings.HasPrefix(strings.ToLower(profileLevelID), "42e0")
 }
 
-// requireNonTrickleTransport enforces the fields firmware must inline
-// because this profile has no trickle PATCH: rtcp-mux, ICE credentials plus
-// at least one candidate, and a DTLS fingerprint with setup:actpass.
 func requireNonTrickleTransport(parsed *sdp.SessionDescription, m *sdp.MediaDescription) error {
 	if _, ok := mediaOrSessionAttribute(parsed, m, "rtcp-mux"); !ok {
 		return fmt.Errorf("%w: rtcp-mux is required", errUnsupportedSDP)

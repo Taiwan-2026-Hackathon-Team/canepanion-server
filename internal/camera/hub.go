@@ -22,11 +22,8 @@ const (
 	h264PayloadType           = 96
 )
 
-// Hub is the process-wide entry point for the camera relay: one shared Pion
-// configuration plus a lookup of per-device sessions. It never accepts a
-// Gin context or raw SDP; Service is the only caller.
 type Hub struct {
-	sessions sync.Map // uuid.UUID -> *deviceSession
+	sessions sync.Map
 
 	api                *webrtc.API
 	iceServers         []webrtc.ICEServer
@@ -34,10 +31,6 @@ type Hub struct {
 	closed             atomic.Bool
 }
 
-// NewHubFromEnv builds one Pion API that registers only H264, reading ICE
-// and negotiation timeout configuration from the environment. It starts no
-// per-device goroutines; those begin only when a device's first request
-// arrives.
 func NewHubFromEnv() (*Hub, error) {
 	iceServers, err := iceServersFromEnv()
 	if err != nil {
@@ -116,14 +109,28 @@ func negotiationTimeoutFromEnv() (time.Duration, error) {
 	return d, nil
 }
 
-// Close is idempotent: it stops every session and closes every peer
-// connection, then waits for each session actor to exit.
+func asDeviceSession(v any) *deviceSession {
+	session, ok := v.(*deviceSession)
+	if !ok {
+		panic("camera hub stored a non-session value")
+	}
+	return session
+}
+
+func (h *Hub) loadedSession(deviceID uuid.UUID) (*deviceSession, bool) {
+	existing, ok := h.sessions.Load(deviceID)
+	if !ok {
+		return nil, false
+	}
+	return asDeviceSession(existing), true
+}
+
 func (h *Hub) Close() error {
 	h.closed.Store(true)
 
 	var sessions []*deviceSession
 	h.sessions.Range(func(_, v any) bool {
-		sessions = append(sessions, v.(*deviceSession)) //nolint:forcetypeassert
+		sessions = append(sessions, asDeviceSession(v))
 		return true
 	})
 	for _, s := range sessions {
@@ -135,13 +142,9 @@ func (h *Hub) Close() error {
 	return nil
 }
 
-// getOrCreateSession locates or lazily starts a device's actor. A session
-// that goes idle removes itself from sessions via onIdle, so a request that
-// loses that race against an exiting actor gets errSessionClosed back from
-// submit and is expected to retry through this method again.
 func (h *Hub) getOrCreateSession(deviceID uuid.UUID) (*deviceSession, error) {
-	if existing, ok := h.sessions.Load(deviceID); ok {
-		return existing.(*deviceSession), nil //nolint:forcetypeassert
+	if session, ok := h.loadedSession(deviceID); ok {
+		return session, nil
 	}
 
 	relay, err := newH264Relay(deviceID.String())
@@ -154,8 +157,8 @@ func (h *Hub) getOrCreateSession(deviceID uuid.UUID) (*deviceSession, error) {
 
 	actual, loaded := h.sessions.LoadOrStore(deviceID, session)
 	if loaded {
-		session.closeAll()                  // lost the race; nothing was ever attached to it.
-		return actual.(*deviceSession), nil //nolint:forcetypeassert
+		session.closeAll()
+		return asDeviceSession(actual), nil
 	}
 	return session, nil
 }
@@ -194,8 +197,8 @@ func (h *Hub) publish(ctx context.Context, deviceID uuid.UUID, offer publisherOf
 		watchConnectionState(session, peerKindPublisher, peer.id, peer.pc, peer.closed)
 		go func() {
 			select {
-			case <-peer.trackReady:
-				forwardRTP(peer.remoteTrack.Load(), lease)
+			case <-peer.remote.ready:
+				forwardRTP(peer.remote.track.Load(), lease)
 			case <-peer.closed:
 			}
 		}()
@@ -249,14 +252,11 @@ func (h *Hub) view(ctx context.Context, deviceID, principal uuid.UUID, offer vie
 	return viewerHandle{}, lastErr
 }
 
-// stopPublication is idempotent: a missing device, missing session, or a
-// publicationID that is no longer current all succeed without error.
 func (h *Hub) stopPublication(_ context.Context, deviceID, publicationID uuid.UUID) error {
-	existing, ok := h.sessions.Load(deviceID)
+	session, ok := h.loadedSession(deviceID)
 	if !ok {
 		return nil
 	}
-	session := existing.(*deviceSession) //nolint:forcetypeassert
 
 	reply := make(chan *publisherPeer, 1)
 	if err := session.submit(removePublisherCmd{id: publicationID, reply: reply}); err != nil {
@@ -268,14 +268,11 @@ func (h *Hub) stopPublication(_ context.Context, deviceID, publicationID uuid.UU
 	return nil
 }
 
-// stopViewer is idempotent for a missing viewer, but returns
-// errNotViewerOwner when the viewer exists and belongs to another user.
 func (h *Hub) stopViewer(_ context.Context, deviceID, principal, viewerID uuid.UUID) error {
-	existing, ok := h.sessions.Load(deviceID)
+	session, ok := h.loadedSession(deviceID)
 	if !ok {
 		return nil
 	}
-	session := existing.(*deviceSession) //nolint:forcetypeassert
 
 	reply := make(chan removeViewerResult, 1)
 	if err := session.submit(removeViewerCmd{id: viewerID, principal: principal, reply: reply}); err != nil {
@@ -291,14 +288,11 @@ func (h *Hub) stopViewer(_ context.Context, deviceID, principal, viewerID uuid.U
 	return nil
 }
 
-// status answers the GET /camera state machine: OFFLINE with no session,
-// otherwise whatever the session actor currently owns.
 func (h *Hub) status(deviceID uuid.UUID) sessionStatus {
-	existing, ok := h.sessions.Load(deviceID)
+	session, ok := h.loadedSession(deviceID)
 	if !ok {
 		return sessionStatus{state: sessionStateOffline}
 	}
-	session := existing.(*deviceSession) //nolint:forcetypeassert
 
 	reply := make(chan sessionStatus, 1)
 	if err := session.submit(getStatusCmd{reply: reply}); err != nil {

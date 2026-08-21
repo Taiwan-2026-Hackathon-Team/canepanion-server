@@ -110,8 +110,6 @@ func (h *Handler) GetStatus(c *gin.Context) {
 	c.JSON(http.StatusOK, response)
 }
 
-// RejectPatch answers the WHIP/WHEP publication and viewer resources: this
-// profile has no trickle ICE restart, so clients must POST a new offer.
 func (h *Handler) RejectPatch(c *gin.Context) {
 	c.Header("Allow", "DELETE")
 	_ = c.Error(appErr.NewMethodNotAllowed("PATCH is not supported; POST a new offer to restart negotiation", nil))

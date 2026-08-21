@@ -21,8 +21,6 @@ func CORS() cors.Config {
 	}
 }
 
-// allowedOrigins reads CORS_ALLOWED_ORIGINS as a comma-separated list,
-// falling back to the local dev origin so existing deployments keep working.
 func allowedOrigins() []string {
 	raw := os.Getenv("CORS_ALLOWED_ORIGINS")
 	if raw == "" {
