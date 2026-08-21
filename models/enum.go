@@ -25,6 +25,8 @@ const (
 	DeviceCommandTypeUpdateConfig      DeviceCommandType = "UPDATE_CONFIG"
 	DeviceCommandTypeReboot            DeviceCommandType = "REBOOT"
 	DeviceCommandTypeFirmwareUpdate    DeviceCommandType = "FIRMWARE_UPDATE"
+	DeviceCommandTypeStartCameraStream DeviceCommandType = "START_CAMERA_STREAM"
+	DeviceCommandTypeStopCameraStream  DeviceCommandType = "STOP_CAMERA_STREAM"
 )
 
 type DeviceCommandStatus string

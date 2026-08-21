@@ -31,3 +31,31 @@ func NewForbidden(msg string, err error) *AppError {
 func NewInternal(msg string, err error) *AppError {
 	return &AppError{Code: 500, Message: msg, Err: err}
 }
+
+func NewMethodNotAllowed(msg string, err error) *AppError {
+	return &AppError{Code: 405, Message: msg, Err: err}
+}
+
+func NewNotAcceptable(msg string, err error) *AppError {
+	return &AppError{Code: 406, Message: msg, Err: err}
+}
+
+func NewContentTooLarge(msg string, err error) *AppError {
+	return &AppError{Code: 413, Message: msg, Err: err}
+}
+
+func NewUnsupportedMediaType(msg string, err error) *AppError {
+	return &AppError{Code: 415, Message: msg, Err: err}
+}
+
+func NewUnprocessableEntity(msg string, err error) *AppError {
+	return &AppError{Code: 422, Message: msg, Err: err}
+}
+
+func NewTooManyRequests(msg string, err error) *AppError {
+	return &AppError{Code: 429, Message: msg, Err: err}
+}
+
+func NewGatewayTimeout(msg string, err error) *AppError {
+	return &AppError{Code: 504, Message: msg, Err: err}
+}

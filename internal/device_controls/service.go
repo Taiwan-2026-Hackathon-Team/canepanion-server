@@ -66,7 +66,7 @@ func (s *Service) CreateCommand(userIDValue, deviceIDValue string, req *CreateCo
 	if device == nil {
 		return nil, appErr.NewNotFound("Device not found", nil)
 	}
-	if userID != device.OwnerUserID && userID != device.GuardianUserID {
+	if !device.IsOwnerOrGuardian(userID) {
 		return nil, appErr.NewForbidden("User cannot create commands for this device", nil)
 	}
 
@@ -100,7 +100,9 @@ func isValidCommandType(commandType models.DeviceCommandType) bool {
 		models.DeviceCommandTypeStartAudioCapture,
 		models.DeviceCommandTypeUpdateConfig,
 		models.DeviceCommandTypeReboot,
-		models.DeviceCommandTypeFirmwareUpdate:
+		models.DeviceCommandTypeFirmwareUpdate,
+		models.DeviceCommandTypeStartCameraStream,
+		models.DeviceCommandTypeStopCameraStream:
 		return true
 	default:
 		return false
