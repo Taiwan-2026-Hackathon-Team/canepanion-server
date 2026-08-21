@@ -215,17 +215,24 @@ func requireNonTrickleTransport(parsed *sdp.SessionDescription, m *sdp.MediaDesc
 		return fmt.Errorf("%w: setup must be actpass", errUnsupportedSDP)
 	}
 
-	hasCandidate := false
-	for _, a := range m.Attributes {
-		if a.Key == "candidate" {
-			hasCandidate = true
-			break
-		}
-	}
-	if !hasCandidate {
+	if !hasICECandidate(parsed, m) {
 		return fmt.Errorf("%w: at least one inline ICE candidate is required", errUnsupportedSDP)
 	}
 	return nil
+}
+
+func hasICECandidate(parsed *sdp.SessionDescription, m *sdp.MediaDescription) bool {
+	for _, a := range m.Attributes {
+		if a.Key == "candidate" {
+			return true
+		}
+	}
+	for _, a := range parsed.Attributes {
+		if a.Key == "candidate" {
+			return true
+		}
+	}
+	return false
 }
 
 func mediaOrSessionAttribute(parsed *sdp.SessionDescription, m *sdp.MediaDescription, key string) (string, bool) {

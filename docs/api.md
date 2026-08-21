@@ -383,8 +383,9 @@ command on its next poll, media setup happens over WebRTC, not the command
 channel: the cane publishes one H264 track and the app views it through a
 non-trickle [WHIP](https://www.ietf.org/archive/id/draft-ietf-wish-whip-09.html)
 /[WHEP](https://www.ietf.org/archive/id/draft-ietf-wish-whep-01.html)
-profile. Video never round-trips through the application server as HTTP
-bytes; the server only relays RTP peer-to-peer over WebRTC.
+profile. The cane and the app each open a WebRTC peer connection to this
+server. The server relays RTP between them. Video does not travel as an
+HTTP body.
 
 | Method | Endpoint | Authentication | Purpose |
 | --- | --- | --- | --- |
@@ -513,6 +514,7 @@ across replicas that cannot see each other's relay.
 | 5 | Configuration synchronization | Allows behavior to be adjusted without reflashing firmware. |
 | 6 | Commands and acknowledgements | Enables reliable cloud-to-device actions. |
 | 7 | Firmware updates | Adds controlled remote software delivery after the core protocol is stable. |
+| 8 | Camera WHIP/WHEP relay | Lets a guardian watch the cane camera after the command poll and media path are both in place. |
 
 ## Required API behavior
 

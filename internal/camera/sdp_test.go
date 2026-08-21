@@ -182,6 +182,20 @@ func TestDecodePublisherOffer_RejectsMissingCandidate(t *testing.T) {
 	}
 }
 
+func TestDecodePublisherOffer_AcceptsSessionLevelCandidate(t *testing.T) {
+	lines := withoutLinePrefix(baseOfferLines("sendonly"), "a=candidate:")
+	var out []string
+	for _, l := range lines {
+		out = append(out, l)
+		if l == "t=0 0" {
+			out = append(out, "a=candidate:1 1 udp 2130706431 127.0.0.1 12345 typ host")
+		}
+	}
+	if _, err := decodePublisherOffer(strings.NewReader(joinSDP(out))); err != nil {
+		t.Fatalf("session-level ICE candidate should be accepted: %v", err)
+	}
+}
+
 func TestDecodePublisherOffer_RejectsNonConstrainedBaselineProfile(t *testing.T) {
 	lines := replaceLinePrefix(baseOfferLines("sendonly"), "a=fmtp:",
 		"a=fmtp:96 level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=64001f")
