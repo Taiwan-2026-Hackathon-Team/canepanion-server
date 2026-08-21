@@ -10,5 +10,5 @@
     "noEmit": true,
     "isolatedModules": true
   },
-  "include": ["src/architecture-webrtc/**/*.ts", "src/architecture-webrtc/**/*.tsx"]
+  "include": ["**/*.ts", "**/*.tsx"]
 }

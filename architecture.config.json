@@ -1,6 +1,0 @@
-{
-  "coverage": "src/architecture/coverage.json",
-  "output": "src/architecture/measured.generated.ts",
-  "sources": ["**/*.go"],
-  "ignore": []
-}

@@ -10,6 +10,6 @@
     "noEmit": true,
     "isolatedModules": true
   },
-  "include": ["src/architecture/**/*.ts", "src/architecture/**/*.tsx"],
-  "exclude": ["src/architecture/**/*.test.ts"]
+  "include": ["**/*.ts", "**/*.tsx"],
+  "exclude": ["**/*.test.ts"]
 }

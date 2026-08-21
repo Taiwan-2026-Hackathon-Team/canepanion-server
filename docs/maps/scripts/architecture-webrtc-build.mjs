@@ -1,9 +1,11 @@
 import * as esbuild from 'esbuild'
 import { createRequire } from 'node:module'
 import path from 'node:path'
+import { repoRoot } from './repo-root.mjs'
 
 const require = createRequire(import.meta.url)
 const reactRoot = path.dirname(require.resolve('react/package.json'))
+const ROOT = repoRoot()
 
 const alias = {
   react: reactRoot,
@@ -14,11 +16,11 @@ const alias = {
 }
 
 await esbuild.build({
-  entryPoints: ['src/architecture-webrtc/entry.tsx'],
+  entryPoints: [path.join(ROOT, 'docs/maps/cane-camera/entry.tsx')],
   bundle: true,
   minify: true,
   format: 'iife',
-  outfile: 'docs/cane-camera.bundle.js',
+  outfile: path.join(ROOT, 'docs/cane-camera.bundle.js'),
   loader: { '.css': 'text' },
   jsx: 'automatic',
   alias,

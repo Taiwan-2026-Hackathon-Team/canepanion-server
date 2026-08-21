@@ -1,6 +1,6 @@
 {
-  "coverage": "src/architecture-webrtc/coverage.json",
-  "output": "src/architecture-webrtc/measured.generated.ts",
+  "coverage": "docs/maps/cane-camera/coverage.json",
+  "output": "docs/maps/cane-camera/measured.generated.ts",
   "sources": [
     "cmd/main.go",
     "infra/routes.go",

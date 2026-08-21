@@ -1,0 +1,17 @@
+{
+  "name": "canepanion-maps",
+  "private": true,
+  "scripts": {
+    "architecture:sync": "node scripts/architecture-sync.mjs && node scripts/architecture-webrtc-sync.mjs",
+    "architecture:build": "node scripts/architecture-build.mjs && node scripts/architecture-webrtc-build.mjs",
+    "architecture:check": "tsc -p architecture/tsconfig.json --noEmit && tsc -p cane-camera/tsconfig.json --noEmit"
+  },
+  "devDependencies": {
+    "@types/react": "^19.1.8",
+    "@types/react-dom": "^19.1.6",
+    "esbuild": "^0.25.5",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "typescript": "^5.8.3"
+  }
+}

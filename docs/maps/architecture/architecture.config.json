@@ -1,0 +1,6 @@
+{
+  "coverage": "docs/maps/architecture/coverage.json",
+  "output": "docs/maps/architecture/measured.generated.ts",
+  "sources": ["**/*.go"],
+  "ignore": []
+}
