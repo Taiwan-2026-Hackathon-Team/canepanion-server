@@ -8,11 +8,12 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"canepanion-server/internal/audio"
+	"canepanion-server/internal/camera"
 	"canepanion-server/internal/push"
 	"canepanion-server/middleware"
 )
 
-func RunGin(config cors.Config, notifier push.Notifier, voiceJob *audio.VoiceJob) {
+func RunGin(config cors.Config, notifier push.Notifier, voiceJob *audio.VoiceJob, cameraHub *camera.Hub) {
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "8080"
@@ -31,7 +32,7 @@ func RunGin(config cors.Config, notifier push.Notifier, voiceJob *audio.VoiceJob
 
 	r.Use(middleware.ErrorHandler())
 
-	RegisterRoutes(r, DB, notifier, voiceJob)
+	RegisterRoutes(r, DB, notifier, voiceJob, cameraHub)
 
 	err := r.Run("0.0.0.0:" + port)
 	if err != nil {

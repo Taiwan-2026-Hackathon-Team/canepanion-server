@@ -283,6 +283,8 @@ Suggested command types include:
 - `UPDATE_CONFIG`
 - `REBOOT`
 - `FIRMWARE_UPDATE`
+- `START_CAMERA_STREAM`
+- `STOP_CAMERA_STREAM`
 
 ## Priority 3: Firmware updates
 
@@ -371,6 +373,134 @@ Reports are idempotent by `(deviceId, messageId)`. A retry returns the original
 event with `duplicate: true`, even if retry fields differ. A new `INSTALLED`
 report updates `devices.firmware_version` to the release version in the same
 database transaction.
+
+## Priority 4: Cane camera live feed
+
+A guardian starts the cane's camera by creating a `START_CAMERA_STREAM`
+command through the existing command API (`POST
+/api/v1/devices/{deviceId}/commands`, above). Once the cane sees that
+command on its next poll, media setup happens over WebRTC, not the command
+channel: the cane publishes one H264 track and the app views it through a
+non-trickle [WHIP](https://www.ietf.org/archive/id/draft-ietf-wish-whip-09.html)
+/[WHEP](https://www.ietf.org/archive/id/draft-ietf-wish-whep-01.html)
+profile. Video never round-trips through the application server as HTTP
+bytes; the server only relays RTP peer-to-peer over WebRTC.
+
+| Method | Endpoint | Authentication | Purpose |
+| --- | --- | --- | --- |
+| `POST` | `/api/v1/firmware/devices/{deviceId}/camera/publications` | Device token | Publish (or replace) the cane's H264 track via a WHIP offer. |
+| `DELETE` | `/api/v1/firmware/devices/{deviceId}/camera/publications/{publicationId}` | Device token | Stop publishing. Idempotent. |
+| `PATCH` | `/api/v1/firmware/devices/{deviceId}/camera/publications/{publicationId}` | Device token | Always `405`; ICE restart is not supported. |
+| `POST` | `/api/v1/devices/{deviceId}/camera/viewers` | User JWT (owner or guardian) | Create a viewer via a WHEP offer. Succeeds even if the cane has not published yet. |
+| `DELETE` | `/api/v1/devices/{deviceId}/camera/viewers/{viewerId}` | User JWT (owner or guardian, and the viewer's creator) | Stop viewing. Idempotent. |
+| `PATCH` | `/api/v1/devices/{deviceId}/camera/viewers/{viewerId}` | User JWT | Always `405`; ICE restart is not supported. |
+| `GET` | `/api/v1/devices/{deviceId}/camera` | User JWT (owner or guardian) | Read the current session state and viewer count. |
+
+This is a non-trickle profile: every offer must gather all of its ICE
+candidates locally and inline them in the SDP body before POSTing, because
+there is no PATCH to trickle additional candidates afterward. A client that
+needs to restart ICE POSTs a brand-new offer to the same collection
+endpoint instead.
+
+### Publish (or replace) the camera track
+
+`POST /api/v1/firmware/devices/{deviceId}/camera/publications`
+
+- `Content-Type: application/sdp` is required; the only allowed parameter is
+  `charset`.
+- `Accept`, if present, must include `application/sdp` or `*/*` (`406` otherwise).
+- The body is an SDP offer, at most 65,536 bytes, with exactly one active
+  `sendonly` video section: H264 Constrained Baseline
+  (`profile-level-id` starting `42e0`), `packetization-mode=1`, `rtcp-mux`,
+  ICE credentials and at least one inline candidate, and a DTLS fingerprint
+  with `setup:actpass`. Audio, data channels, simulcast, and any extra
+  active media section are rejected with `422`.
+
+A successful response is `201 Created` with `Content-Type: application/sdp`,
+`Location: /api/v1/firmware/devices/{deviceId}/camera/publications/{publicationId}`,
+`Cache-Control: no-store`, `X-Content-Type-Options: nosniff`, and the SDP
+answer (including gathered server candidates) as the body. The answer is
+returned once local ICE gathering finishes, not once the peers actually
+connect; gathering has a 10-second budget (`WEBRTC_NEGOTIATION_TIMEOUT`,
+`504` on timeout). The new publication immediately becomes the device's one
+active publisher; any previous publication is closed. Existing viewers keep
+their own peer connection and simply start receiving RTP from the new
+source — no viewer renegotiates.
+
+### Stop publishing
+
+`DELETE /api/v1/firmware/devices/{deviceId}/camera/publications/{publicationId}`
+
+Returns `204 No Content`, including when the ID is unknown, already closed,
+or was superseded by a later publication (stopping a stale ID never affects
+the current one).
+
+### Create a viewer
+
+`POST /api/v1/devices/{deviceId}/camera/viewers`
+
+Same `Content-Type`/`Accept`/size/gathering rules as publishing, but the
+offer's one active video section must be `recvonly`. A device with no active
+publisher still returns `201`; the viewer attaches to the device's stable
+relay track and starts receiving RTP whenever a cane connects. A device may
+have at most 4 concurrent viewers; the 5th attempt returns `429`.
+
+A successful response is `201 Created` with
+`Location: /api/v1/devices/{deviceId}/camera/viewers/{viewerId}` and the SDP
+answer as the body, using the same headers as publication creation.
+
+### Stop viewing
+
+`DELETE /api/v1/devices/{deviceId}/camera/viewers/{viewerId}`
+
+Returns `204 No Content`, including repeat calls and already-closed viewers.
+A viewer may only be deleted by the same user who created it; the other
+owner/guardian gets `403` rather than being able to guess the ID.
+
+### Get camera status
+
+`GET /api/v1/devices/{deviceId}/camera`
+
+```json
+{
+  "state": "LIVE",
+  "viewerCount": 2
+}
+```
+
+`state` is `OFFLINE` (no session for this device), `WAITING` (viewers
+connected, no publisher yet), or `LIVE` (a publisher is attached).
+
+### Errors
+
+| Status | Condition |
+| --- | --- |
+| `400 Bad Request` | Invalid path UUID or syntactically invalid SDP |
+| `401 Unauthorized` | Missing, invalid, or expired bearer token |
+| `403 Forbidden` | Device token/path mismatch, caller is not owner or guardian, or the viewer belongs to another user |
+| `404 Not Found` | The device does not exist |
+| `405 Method Not Allowed` | `PATCH` on a publication or viewer resource (`Allow: DELETE`) |
+| `406 Not Acceptable` | `Accept` excludes `application/sdp` |
+| `413 Content Too Large` | SDP body exceeds 65,536 bytes |
+| `415 Unsupported Media Type` | Request `Content-Type` is not `application/sdp` |
+| `422 Unprocessable Content` | SDP parses but violates the H264/direction/ICE/DTLS/non-trickle profile |
+| `429 Too Many Requests` | The device already has 4 viewers |
+| `504 Gateway Timeout` | Local ICE gathering did not finish within `WEBRTC_NEGOTIATION_TIMEOUT` |
+
+### Configuration
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `WEBRTC_STUN_URLS` | `stun:stun.l.google.com:19302` | Comma-separated STUN server URLs handed to every peer connection. |
+| `WEBRTC_TURN_URLS` | *(none)* | Comma-separated TURN server URLs; optional. |
+| `WEBRTC_TURN_USERNAME`, `WEBRTC_TURN_CREDENTIAL` | *(none)* | Required together when `WEBRTC_TURN_URLS` is set. |
+| `WEBRTC_NEGOTIATION_TIMEOUT` | `10s` | Local ICE gathering budget for both WHIP and WHEP offers. |
+
+Firmware and the guardian app must use equivalent ICE configuration to
+create a compatible offer. Because sessions live in server process memory,
+a deployment with multiple Gin replicas needs device-ID session affinity;
+plain round-robin routing would split a device's publisher and viewers
+across replicas that cannot see each other's relay.
 
 ## Recommended implementation order
 

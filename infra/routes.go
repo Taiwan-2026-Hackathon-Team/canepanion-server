@@ -3,6 +3,7 @@ package infra
 import (
 	"canepanion-server/internal/audio"
 	"canepanion-server/internal/auth"
+	"canepanion-server/internal/camera"
 	devicecontrol "canepanion-server/internal/device_controls"
 	"canepanion-server/internal/devices"
 	firmwareauth "canepanion-server/internal/firmware_auth"
@@ -16,7 +17,7 @@ import (
 	"gorm.io/gorm"
 )
 
-func RegisterRoutes(r *gin.Engine, DB *gorm.DB, notifier push.Notifier, voiceJob *audio.VoiceJob) {
+func RegisterRoutes(r *gin.Engine, DB *gorm.DB, notifier push.Notifier, voiceJob *audio.VoiceJob, cameraHub *camera.Hub) {
 	r.GET("/", func(c *gin.Context) {
 		c.JSON(200, gin.H{"message": "🩼 Canepanion Server is running"})
 	})
@@ -27,6 +28,12 @@ func RegisterRoutes(r *gin.Engine, DB *gorm.DB, notifier push.Notifier, voiceJob
 	registerAuth(v1, DB)
 	registerDevices(v1, DB)
 
+	// cameraHandler is shared by the app-side WHEP routes below and the
+	// firmware-side WHIP routes further down; both sit on the one
+	// process-wide Hub.
+	cameraHandler := camera.NewHandler(camera.NewService(devicecontrol.NewRepository(DB), cameraHub))
+	registerCamera(v1, cameraHandler)
+
 	// Firmware–Cloud API Routes
 	firmware := v1.Group("/firmware")
 	registerFirmwareAuth(firmware, DB)
@@ -34,6 +41,7 @@ func RegisterRoutes(r *gin.Engine, DB *gorm.DB, notifier push.Notifier, voiceJob
 	registerFirmwareAudio(firmware, DB, voiceJob)
 	registerFirmwareControl(firmware, DB)
 	registerFirmwareUpdates(firmware, DB)
+	registerFirmwareCamera(firmware, cameraHandler)
 }
 
 func registerAuth(r *gin.RouterGroup, DB *gorm.DB) {
@@ -103,5 +111,26 @@ func registerFirmwareUpdates(r *gin.RouterGroup, DB *gorm.DB) {
 	{
 		firmwareGrp.GET("/latest", handler.GetLatest)
 		firmwareGrp.POST("/report", handler.ReportFirmwareUpdate)
+	}
+}
+
+// registerCamera wires the guardian-app WHEP endpoints.
+func registerCamera(r *gin.RouterGroup, handler *camera.Handler) {
+	deviceGrp := r.Group("/devices/:deviceId/camera", middleware.JWTAuthMiddleware())
+	{
+		deviceGrp.GET("", handler.GetStatus)
+		deviceGrp.POST("/viewers", handler.CreateViewer)
+		deviceGrp.DELETE("/viewers/:viewerId", handler.DeleteViewer)
+		deviceGrp.PATCH("/viewers/:viewerId", handler.RejectPatch)
+	}
+}
+
+// registerFirmwareCamera wires the cane's WHIP publication endpoints.
+func registerFirmwareCamera(r *gin.RouterGroup, handler *camera.Handler) {
+	deviceGrp := r.Group("/devices/:deviceId/camera", middleware.DeviceAuthMiddleware())
+	{
+		deviceGrp.POST("/publications", handler.CreatePublication)
+		deviceGrp.DELETE("/publications/:publicationId", handler.DeletePublication)
+		deviceGrp.PATCH("/publications/:publicationId", handler.RejectPatch)
 	}
 }
