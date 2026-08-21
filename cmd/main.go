@@ -7,6 +7,7 @@ import (
 	"canepanion-server/config"
 	"canepanion-server/infra"
 	"canepanion-server/internal/audio"
+	"canepanion-server/internal/camera"
 	"canepanion-server/internal/push"
 )
 
@@ -33,5 +34,11 @@ func main() {
 		log.Fatalf("Failed to initialize voice pipeline: %v", err)
 	}
 
-	infra.RunGin(config.CORS(), notifier, voiceJob)
+	cameraHub, err := camera.NewHubFromEnv()
+	if err != nil {
+		log.Fatalf("Failed to initialize camera relay: %v", err)
+	}
+	defer func() { _ = cameraHub.Close() }()
+
+	infra.RunGin(config.CORS(), notifier, voiceJob, cameraHub)
 }

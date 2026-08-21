@@ -25,3 +25,7 @@ type Devices struct {
 	Owner    Users `gorm:"foreignKey:OwnerUserID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE" json:"-"`
 	Guardian Users `gorm:"foreignKey:GuardianUserID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE" json:"-"`
 }
+
+func (d Devices) IsOwnerOrGuardian(userID uuid.UUID) bool {
+	return userID == d.OwnerUserID || userID == d.GuardianUserID
+}
