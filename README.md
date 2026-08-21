@@ -43,6 +43,8 @@ This repository contains the CanePanion cloud server. It is responsible for:
 
 - [Database schema](docs/database-schema.md)
 - [Firmware-cloud API proposal](docs/api.md)
+- [Architecture map](docs/architecture.html) (double-click the file, or open it in any browser; no server)
+- [Live camera path](docs/cane-camera.html) (cane, server, and phone)
 ---
 
 # CanePanion（繁體中文）
@@ -85,3 +87,5 @@ CanePanion 為手杖使用者與其監護人提供一個共享的安全平台。
 
 - [資料庫結構](docs/database-schema.md)
 - [韌體與雲端 API 提案](docs/api.md)
+- [架構地圖](docs/architecture.html)（雙擊檔案，或用任何瀏覽器開啟即可，不需伺服器）
+- [即時影像路徑](docs/cane-camera.html)（手杖、伺服器、手機）

@@ -1,0 +1,48 @@
+{
+  "$schema": "Every claimed Go file in camera, routing, middleware, and command dispatch is claimed once.",
+  "cane-firmware": {
+    "owns": []
+  },
+  "cane-auth": {
+    "owns": ["middleware/device_auth.go"]
+  },
+  "routes-entry": {
+    "owns": ["infra/routes.go", "cmd/main.go"]
+  },
+  "camera-handler": {
+    "owns": ["internal/camera/handler.go"]
+  },
+  "sdp-decoder": {
+    "owns": ["internal/camera/sdp.go", "internal/camera/sdp_test.go"]
+  },
+  "camera-service": {
+    "owns": ["internal/camera/service.go"]
+  },
+  "command-queue": {
+    "owns": ["internal/device_controls/**/*.go", "models/enum.go"]
+  },
+  "camera-hub": {
+    "owns": ["internal/camera/hub.go", "internal/camera/hub_test.go"]
+  },
+  "peer-negotiator": {
+    "owns": ["internal/camera/peer.go"]
+  },
+  "camera-types": {
+    "owns": ["internal/camera/types.go"]
+  },
+  "session-actor": {
+    "owns": ["internal/camera/session.go"]
+  },
+  "shared-pipe": {
+    "owns": ["internal/camera/relay.go"]
+  },
+  "jwt-auth": {
+    "owns": ["middleware/jwt_auth.go"]
+  },
+  "guardian-app": {
+    "owns": []
+  },
+  "ice-servers": {
+    "owns": []
+  }
+}

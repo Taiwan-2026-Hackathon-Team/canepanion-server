@@ -1,0 +1,14 @@
+{
+  "coverage": "src/architecture-webrtc/coverage.json",
+  "output": "src/architecture-webrtc/measured.generated.ts",
+  "sources": [
+    "cmd/main.go",
+    "infra/routes.go",
+    "middleware/device_auth.go",
+    "middleware/jwt_auth.go",
+    "internal/camera/**/*.go",
+    "internal/device_controls/**/*.go",
+    "models/enum.go"
+  ],
+  "ignore": []
+}
