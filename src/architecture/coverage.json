@@ -1,0 +1,23 @@
+{
+  "$note": "Every .go file is claimed exactly once. Patterns are directory roots.",
+  "boot": { "owns": ["cmd/**"] },
+  "config": { "owns": ["config/**"] },
+  "infra": { "owns": ["infra/**"] },
+  "middleware": { "owns": ["middleware/**"] },
+  "models": { "owns": ["models/**"] },
+  "auth": { "owns": ["internal/auth/**"] },
+  "devices": { "owns": ["internal/devices/**"] },
+  "firmware-auth": { "owns": ["internal/firmware_auth/**"] },
+  "telemetry": { "owns": ["internal/telemetry/**"] },
+  "audio": { "owns": ["internal/audio/**"] },
+  "device-controls": { "owns": ["internal/device_controls/**"] },
+  "firmware-updates": { "owns": ["internal/firmware_updates/**"] },
+  "camera": { "owns": ["internal/camera/**"] },
+  "push": { "owns": ["internal/push/**"] },
+  "pkg-utils": { "owns": ["pkg/utils/**"] },
+  "pkg-http": { "owns": ["pkg/http/**"] },
+  "pkg-errors": { "owns": ["pkg/errors/**"] },
+  "pkg-speech": { "owns": ["pkg/speech/**"] },
+  "pkg-gemini": { "owns": ["pkg/gemini/**"] },
+  "pkg-tts": { "owns": ["pkg/tts/**"] }
+}
