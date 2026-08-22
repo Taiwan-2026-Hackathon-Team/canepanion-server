@@ -1,0 +1,55 @@
+# Keeps docs/ map bundles fresh without anyone running npm locally.
+#
+# On every push to main that touches the Go source or the map sources, this
+# workflow re-derives the measurements, rebuilds the two viewers, and commits
+# any drift back to main. npm exists only here.
+name: docs-maps
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '**.go'
+      - 'go.mod'
+      - 'go.sum'
+      - 'docs/maps/**'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: docs-maps
+  cancel-in-progress: true
+
+jobs:
+  rebuild:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: docs/maps/package-lock.json
+
+      - name: Sync + build + typecheck
+        working-directory: docs/maps
+        run: |
+          npm ci
+          npm run architecture:sync
+          npm run architecture:build
+          npm run architecture:check
+
+      - name: Commit refreshed maps
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add docs/
+          if git diff --cached --quiet; then
+            echo "Maps already up to date."
+          else
+            git commit -m "docs: refresh architecture maps (automated)"
+            git push
+          fi
