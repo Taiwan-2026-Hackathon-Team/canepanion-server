@@ -12,3 +12,6 @@ fmt:
 
 dev:
 	air -c air.toml
+
+ingest:
+	go run ./cmd/caneingest

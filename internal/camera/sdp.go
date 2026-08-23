@@ -3,6 +3,7 @@ package camera
 import (
 	"fmt"
 	"io"
+	"strconv"
 	"strings"
 
 	"github.com/pion/sdp/v3"
@@ -142,8 +143,8 @@ func negotiatedH264Profile(m *sdp.MediaDescription) (h264Profile, error) {
 	}
 
 	profileLevelID := params["profile-level-id"]
-	if !isConstrainedBaseline(profileLevelID) {
-		return h264Profile{}, fmt.Errorf("%w: profile-level-id %q is not H264 constrained baseline", errUnsupportedSDP, profileLevelID)
+	if !isBaselineProfile(profileLevelID) {
+		return h264Profile{}, fmt.Errorf("%w: profile-level-id %q is not an H264 baseline profile", errUnsupportedSDP, profileLevelID)
 	}
 
 	return h264Profile{profileLevelID: profileLevelID, packetizationMode: 1, clockRate: 90000}, nil
@@ -179,8 +180,28 @@ func parseFmtp(line string) map[string]string {
 	return params
 }
 
-func isConstrainedBaseline(profileLevelID string) bool {
-	return len(profileLevelID) == 6 && strings.HasPrefix(strings.ToLower(profileLevelID), "42e0")
+// profile-level-id is three hex bytes: profile_idc, profile_iop (the
+// constraint_set flags), and level_idc. Only profile_idc is worth gating on.
+//
+// Requiring an exact "42e0" prefix turned away real constrained-baseline
+// publishers. Browsers offer "42e01f", x264 writes profile_iop 0xc0
+// (constraint_set0+1) for its Constrained Baseline output, and FFmpeg's WHIP
+// muxer zeroes profile_iop altogether -- it advertises "4200xx" regardless of
+// what the SPS actually contains. Those describe the same decodable stream;
+// only the constraint bits differ.
+//
+// Nothing downstream reads this value: the hub registers H264 with no SDP fmtp
+// line (hub.go) and the relay forwards RTP without inspecting payloads
+// (relay.go), so this is an admission check rather than a codec contract.
+// Main (0x4d) and High (0x64) are still turned away.
+func isBaselineProfile(profileLevelID string) bool {
+	if len(profileLevelID) != 6 {
+		return false
+	}
+	if _, err := strconv.ParseUint(profileLevelID, 16, 32); err != nil {
+		return false
+	}
+	return strings.EqualFold(profileLevelID[:2], "42")
 }
 
 func requireNonTrickleTransport(parsed *sdp.SessionDescription, m *sdp.MediaDescription) error {
