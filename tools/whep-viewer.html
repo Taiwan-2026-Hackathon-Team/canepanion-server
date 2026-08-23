@@ -1,0 +1,180 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Cane camera — WHEP viewer</title>
+<style>
+  body { font: 14px/1.5 system-ui, sans-serif; margin: 2rem auto; max-width: 46rem; padding: 0 1rem;
+         background: #101014; color: #e8e8ea; }
+  h1 { font-size: 1.2rem; margin: 0 0 1rem; }
+  label { display: block; margin: .6rem 0 .15rem; color: #a8a8b0; font-size: .85rem; }
+  input { width: 100%; padding: .45rem .6rem; border: 1px solid #33333c; border-radius: 6px;
+          background: #1a1a20; color: #e8e8ea; font: inherit; box-sizing: border-box; }
+  button { margin-top: 1rem; padding: .55rem 1.1rem; border: 0; border-radius: 6px;
+           background: #4c7fff; color: #fff; font: inherit; font-weight: 600; cursor: pointer; }
+  button[disabled] { opacity: .5; cursor: default; }
+  video { width: 100%; margin-top: 1rem; background: #000; border-radius: 8px; image-rendering: pixelated;
+          border: 2px solid #4c7fff; min-height: 240px; }
+  #stats { margin-top: .5rem; padding: .5rem .8rem; background: #14141a; border-radius: 6px;
+           font-family: ui-monospace, monospace; font-size: .8rem; color: #7ee787; }
+  canvas { margin-top: .5rem; border: 1px solid #33333c; border-radius: 6px; width: 100%;
+           image-rendering: pixelated; }
+  #log { margin-top: 1rem; padding: .6rem .8rem; background: #1a1a20; border-radius: 6px;
+         white-space: pre-wrap; font-family: ui-monospace, monospace; font-size: .8rem; color: #a8a8b0; }
+  .row { display: flex; gap: .8rem; }
+  .row > div { flex: 1; }
+</style>
+
+<h1>Cane camera — WHEP viewer</h1>
+
+<div class="row">
+  <div>
+    <label for="server">Server</label>
+    <input id="server" value="http://localhost:8080">
+  </div>
+  <div>
+    <label for="device">Device ID</label>
+    <input id="device" value="349324c8-29bb-4953-9e22-4d8de868598d">
+  </div>
+</div>
+<div class="row">
+  <div>
+    <label for="email">Email</label>
+    <input id="email" value="billy@gmail.com">
+  </div>
+  <div>
+    <label for="password">Password</label>
+    <input id="password" type="password" value="pass123">
+  </div>
+</div>
+
+<button id="watch">Watch</button>
+<video id="video" autoplay playsinline muted></video>
+<div id="stats">no stats yet</div>
+<p style="color:#a8a8b0;font-size:.85rem;margin:.8rem 0 .2rem">Brightness-boosted (x16) &mdash; reveals a very dark but valid picture:</p>
+<canvas id="boost" width="160" height="120"></canvas>
+<div id="log">idle</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const log = msg => { $('log').textContent += '\n' + msg; };
+
+$('watch').onclick = async () => {
+  $('watch').disabled = true;
+  $('log').textContent = 'starting';
+  try {
+    const server = $('server').value.replace(/\/$/, '');
+
+    const auth = await fetch(server + '/api/v1/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: $('email').value, password: $('password').value }),
+    });
+    if (!auth.ok) throw new Error('login failed: ' + auth.status + ' ' + await auth.text());
+    const token = (await auth.json()).token;
+    log('logged in');
+
+    const pc = new RTCPeerConnection();
+    pc.ontrack = e => { $('video').srcObject = e.streams[0]; log('track received'); };
+    pc.onconnectionstatechange = () => log('peer connection ' + pc.connectionState);
+
+    const tx = pc.addTransceiver('video', { direction: 'recvonly' });
+
+    // The relay reads the FIRST H264/90000 rtpmap in the offer and rejects it
+    // unless that payload type carries packetization-mode=1. Browsers usually
+    // offer several H264 variants, so pin the preference rather than gamble on
+    // the order Chrome happens to emit.
+    const caps = RTCRtpReceiver.getCapabilities('video');
+    const h264 = caps.codecs.filter(c =>
+      c.mimeType.toLowerCase() === 'video/h264' &&
+      (c.sdpFmtpLine || '').includes('packetization-mode=1'));
+    if (h264.length && tx.setCodecPreferences) {
+      tx.setCodecPreferences(h264);
+      log('codec pinned: ' + h264[0].sdpFmtpLine);
+    }
+
+    await pc.setLocalDescription(await pc.createOffer());
+
+    // The relay is non-trickle: there is no PATCH to add candidates later, so
+    // everything must be in the offer body before it is posted.
+    if (pc.iceGatheringState !== 'complete') {
+      await new Promise(done => pc.addEventListener('icegatheringstatechange',
+        () => pc.iceGatheringState === 'complete' && done()));
+    }
+    log('ICE gathering complete');
+
+    const res = await fetch(server + '/api/v1/devices/' + $('device').value + '/camera/viewers', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/sdp', 'Accept': 'application/sdp',
+                 'Authorization': 'Bearer ' + token },
+      body: pc.localDescription.sdp,
+    });
+    if (res.status !== 201) throw new Error('WHEP subscribe: ' + res.status + ' ' + await res.text());
+
+    const resource = res.headers.get('Location');
+    await pc.setRemoteDescription({ type: 'answer', sdp: await res.text() });
+    log('subscribed' + (resource ? ' (' + resource + ')' : ''));
+
+    startDiagnostics(pc);
+
+    // sendBeacon can only issue a POST with no custom headers, so it could
+    // neither reach the DELETE route nor carry the bearer token -- every
+    // closed tab left a viewer attached to the relay forever. fetch with
+    // keepalive survives page teardown and preserves method and headers.
+    window.addEventListener('pagehide', () => {
+      if (!resource) return;
+      fetch(new URL(resource, server).href, {
+        method: 'DELETE',
+        headers: { 'Authorization': 'Bearer ' + token },
+        keepalive: true,
+      }).catch(() => {});
+    });
+  } catch (err) {
+    log('ERROR: ' + err.message);
+    $('watch').disabled = false;
+  }
+};
+
+function startDiagnostics(pc) {
+  const video = $('video');
+  const canvas = $('boost');
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
+  let lastFrames = 0, lastBytes = 0;
+
+  setInterval(async () => {
+    for (const report of await pc.getStats()) {
+      const r = report[1];
+      if (r.type !== 'inbound-rtp' || r.kind !== 'video') continue;
+      const fps = (r.framesDecoded || 0) - lastFrames;
+      const kbps = (((r.bytesReceived || 0) - lastBytes) * 8 / 1000).toFixed(1);
+      lastFrames = r.framesDecoded || 0;
+      lastBytes = r.bytesReceived || 0;
+      $('stats').textContent =
+        `${video.videoWidth}x${video.videoHeight}  decoded ${lastFrames} frames ` +
+        `(${fps}/s)  ${kbps} kbps  lost ${r.packetsLost || 0}`;
+    }
+  }, 1000);
+
+  // Amplify the picture so a valid-but-dark frame is distinguishable from a
+  // dead one. Mean luma is printed alongside, which is the number that says
+  // whether the camera is seeing anything at all.
+  setInterval(() => {
+    if (!video.videoWidth) return;
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    ctx.drawImage(video, 0, 0);
+    const img = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    const d = img.data;
+    let sum = 0, peak = 0;
+    for (let i = 0; i < d.length; i += 4) {
+      const l = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
+      sum += l;
+      if (l > peak) peak = l;
+      d[i] = Math.min(255, d[i] * 16);
+      d[i + 1] = Math.min(255, d[i + 1] * 16);
+      d[i + 2] = Math.min(255, d[i + 2] * 16);
+    }
+    ctx.putImageData(img, 0, 0);
+    const mean = (sum / (d.length / 4)).toFixed(2);
+    $('stats').textContent += `  |  mean luma ${mean}/255, peak ${peak.toFixed(0)}`;
+  }, 1000);
+}
+</script>

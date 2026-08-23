@@ -192,12 +192,54 @@ func TestDecodePublisherOffer_AcceptsSessionLevelCandidate(t *testing.T) {
 	}
 }
 
-func TestDecodePublisherOffer_RejectsNonConstrainedBaselineProfile(t *testing.T) {
-	lines := replaceLinePrefix(baseOfferLines("sendonly"), "a=fmtp:",
-		"a=fmtp:96 level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=64001f")
-	_, err := decodePublisherOffer(strings.NewReader(joinSDP(lines)))
-	if !errors.Is(err, errUnsupportedSDP) {
-		t.Fatalf("decodePublisherOffer() = %v, want errUnsupportedSDP", err)
+func offerWithProfile(direction, profileLevelID string) string {
+	lines := replaceLinePrefix(baseOfferLines(direction), "a=fmtp:",
+		"a=fmtp:96 level-asymmetry-allowed=1;packetization-mode=1;profile-level-id="+profileLevelID)
+	return joinSDP(lines)
+}
+
+// The constraint_set bits in profile_iop vary by encoder and mean nothing to a
+// relay that forwards RTP without decoding it. Every value here is the baseline
+// profile and must be admitted.
+func TestDecodePublisherOffer_AcceptsBaselineConstraintVariants(t *testing.T) {
+	cases := map[string]string{
+		"browser constrained baseline": "42e01f",
+		"x264 constraint_set0+1":       "42c00a",
+		"FFmpeg WHIP zeroed iop":       "42000a",
+		"constraint_set1 only":         "42401f",
+		"uppercase hex":                "42E01F",
+	}
+
+	for name, profileLevelID := range cases {
+		t.Run(name, func(t *testing.T) {
+			offer, err := decodePublisherOffer(strings.NewReader(offerWithProfile("sendonly", profileLevelID)))
+			if err != nil {
+				t.Fatalf("decodePublisherOffer(%s) = %v, want nil error", profileLevelID, err)
+			}
+			if offer.codec.profileLevelID != profileLevelID {
+				t.Errorf("profileLevelID = %q, want %q", offer.codec.profileLevelID, profileLevelID)
+			}
+		})
+	}
+}
+
+func TestDecodePublisherOffer_RejectsNonBaselineProfile(t *testing.T) {
+	cases := map[string]string{
+		"High profile":     "64001f",
+		"Main profile":     "4d001f",
+		"too short":        "42e0",
+		"too long":         "42e01f00",
+		"not hex":          "42e0zz",
+		"missing entirely": "",
+	}
+
+	for name, profileLevelID := range cases {
+		t.Run(name, func(t *testing.T) {
+			_, err := decodePublisherOffer(strings.NewReader(offerWithProfile("sendonly", profileLevelID)))
+			if !errors.Is(err, errUnsupportedSDP) {
+				t.Fatalf("decodePublisherOffer(%q) = %v, want errUnsupportedSDP", profileLevelID, err)
+			}
+		})
 	}
 }
 

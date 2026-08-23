@@ -503,6 +503,55 @@ a deployment with multiple Gin replicas needs device-ID session affinity;
 plain round-robin routing would split a device's publisher and viewers
 across replicas that cannot see each other's relay.
 
+### Ingesting the cane's UDP camera stream (`cmd/caneingest`)
+
+The cane firmware does not speak WebRTC. It streams raw RGB565 frames over a
+custom UDP protocol, cut into ~1400-byte slices that each carry a full
+descriptor, and it sends to whichever address last sent it a datagram.
+`cmd/caneingest` bridges that to this relay:
+
+```
+cane --UDP slices--> caneingest --raw frames--> ffmpeg --H264--> WHIP --> relay
+```
+
+It runs as its own process so frames never pass through the Gin handlers, and
+it needs **no firmware change** -- it plays the same role the firmware's bench
+viewer does. Only one viewer can watch the cane at a time, so the bench viewer
+and `caneingest` must not run together.
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `CANE_ADDR` | *(required)* | The cane's `host:port`, e.g. `192.168.1.50:5000`. |
+| `CANE_DEVICE_ID` | *(required)* | Device UUID; also selects the publication endpoint. |
+| `CANE_DEVICE_CREDENTIAL` | *(required)* | From `POST /api/v1/firmware/devices/activate`. Exchanged for a token per publish. |
+| `CANE_SERVER_URL` | `http://localhost:8080` | Base URL of this server. |
+| `CANE_OUT_FPS` | `15` | Rate at which the canvas is fed to the encoder. |
+| `CANE_PIXEL_FORMAT` | `rgb565le` | Set `rgb565be` if red and blue are swapped. |
+| `CANE_STUN_URLS` | *(none)* | Comma-separated; unnecessary on a LAN. |
+| `CANE_DEBUG_PNG` | *(none)* | Path to periodically dump a decoded frame for inspection. |
+
+Requires `ffmpeg` on `PATH`. Frame size is read off the wire, not configured.
+
+The UDP wire format, the reassembly rules and the rate-control feedback loop
+are documented in full in [camera-udp-protocol.md](camera-udp-protocol.md).
+
+Two design points worth knowing before changing it:
+
+- **It does not use FFmpeg's WHIP muxer**, which cannot satisfy this relay: it
+  offers `a=setup:passive` where `actpass` is required, inlines no ICE
+  candidates where at least one is required, and zeroes the `profile_iop` byte
+  so it advertises `profile-level-id=4200xx` whatever the encoder produced.
+  The WebRTC side is therefore pion, and ffmpeg is used purely as a codec.
+- **A lost slice must read as a stale band, not a dropped frame.** The link
+  loses a large and variable share of slices -- often enough that *no* frame
+  arrives whole -- so slices are painted into a persistent canvas that is fed
+  to the encoder on a fixed tick. Whole frames are still counted separately,
+  because that is the number the firmware's rate controller hill-climbs on.
+
+`cmd/whepprobe` subscribes as a real WHEP viewer and counts arriving RTP, which
+is how to tell an actually-flowing stream from a publication that merely exists
+-- `state: LIVE` only means a publisher is attached.
+
 ## Recommended implementation order
 
 | Order | Capability | Reason |
