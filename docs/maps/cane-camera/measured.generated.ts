@@ -17,7 +17,7 @@ export const MEASURED: Record<string, { count: number; loc: number }> = {
   'jwt-auth': { count: 1, loc: 70 },
   'peer-negotiator': { count: 1, loc: 215 },
   'routes-entry': { count: 2, loc: 177 },
-  'sdp-decoder': { count: 2, loc: 480 },
+  'sdp-decoder': { count: 2, loc: 543 },
   'session-actor': { count: 1, loc: 193 },
   'shared-pipe': { count: 1, loc: 90 },
 }

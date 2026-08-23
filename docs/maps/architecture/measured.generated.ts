@@ -10,8 +10,8 @@
 export const MEASURED: Record<string, { count: number; loc: number }> = {
   'audio': { count: 7, loc: 873 },
   'auth': { count: 4, loc: 306 },
-  'boot': { count: 1, loc: 45 },
-  'camera': { count: 10, loc: 1989 },
+  'boot': { count: 4, loc: 595 },
+  'camera': { count: 10, loc: 2052 },
   'config': { count: 3, loc: 84 },
   'device-controls': { count: 4, loc: 570 },
   'devices': { count: 4, loc: 147 },
@@ -30,4 +30,14 @@ export const MEASURED: Record<string, { count: number; loc: number }> = {
   'telemetry': { count: 4, loc: 738 },
 }
 
-export const UNCLAIMED: string[] = []
+export const UNCLAIMED: string[] = [
+  'internal/caneingest/auth.go',
+  'internal/caneingest/encoder.go',
+  'internal/caneingest/log.go',
+  'internal/caneingest/pump.go',
+  'internal/caneingest/reassembler.go',
+  'internal/caneingest/reassembler_test.go',
+  'internal/caneingest/snapshot.go',
+  'internal/caneingest/viewer.go',
+  'internal/caneingest/whip.go',
+]
